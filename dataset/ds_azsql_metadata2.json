@@ -1,0 +1,13 @@
+{
+	"name": "ds_azsql_metadata2",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_azsql_metadata",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

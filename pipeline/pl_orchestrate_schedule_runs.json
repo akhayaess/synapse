@@ -1,0 +1,345 @@
+{
+	"name": "pl_orchestrate_schedule_runs",
+	"properties": {
+		"description": "This is a master pipeline that orchestrates schedules runs",
+		"activities": [
+			{
+				"name": "Trigger pipelines",
+				"description": "Trigger pipelines",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get schedule names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get schedule names').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "If source type SQL",
+							"description": "If source type SQL",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().source_type,'sql')",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute pipeline source SQL",
+										"description": "Execute pipeline source SQL",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "pl_extract_sql_to_adls",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"source_name": {
+													"value": "@item().source_name",
+													"type": "Expression"
+												},
+												"schedule_name": {
+													"value": "@item().schedule_name",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "If source type Progress",
+							"description": "If source type Progress",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().source_type,'progress')",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute pipeline source Progress",
+										"description": "Execute pipeline source Progress",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "pl_extract_odbc_sql_to_adls",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"source_name": {
+													"value": "@item().source_name",
+													"type": "Expression"
+												},
+												"schedule_name": {
+													"value": "@item().schedule_name",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Get bronze to silver schedule name",
+							"description": "Get bronze to silver schedule name",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "If source type SQL",
+									"dependencyConditions": [
+										"Completed"
+									]
+								},
+								{
+									"activity": "If source type Progress",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.5:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[dbo].[usp_orchestrate_bronze_to_silver_pipeline_exec]",
+									"storedProcedureParameters": {
+										"execution_id": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"schedule_name": {
+											"type": "String",
+											"value": {
+												"value": "@item().schedule_name",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ds_azsql_metadata2",
+									"type": "DatasetReference"
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "Check for pipelines to run",
+							"description": "Check for pipelines to run",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Get bronze to silver schedule name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Get bronze to silver schedule name').output.count,0)\n",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute bronze to silver pipeline",
+										"description": "Execute bronze to silver pipeline",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "pl_refresh_silver_tables",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"adlsname": "wndnamclcdteus2adl",
+												"schedule_name": {
+													"value": "@activity('Get bronze to silver schedule name').output.value[0].schedule_name",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Get silver to platinum schedule name",
+							"description": "Get silver to platinum schedule name",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Check for pipelines to run",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.5:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[dbo].[usp_orchestrate_silver_to_platinum_pipeline_exec]",
+									"storedProcedureParameters": {
+										"execution_id": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"schedule_name": {
+											"type": "String",
+											"value": {
+												"value": "@item().schedule_name",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ds_azsql_metadata2",
+									"type": "DatasetReference"
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "Check for pipelines to run end to end",
+							"description": "Check for pipelines to run end to end",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Get silver to platinum schedule name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('Get silver to platinum schedule name').output.count,0)\n",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute silver to platinum pipeline",
+										"description": "Execute silver to platinum pipeline",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "pl_refresh_platinum_tables",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"schedule_name": {
+													"value": "@activity('Get silver to platinum schedule name').output.value[0].schedule_name",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get schedule names",
+				"description": "Get schedule names",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.05:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[dbo].[usp_orchestrate_pipeline_exec]",
+						"storedProcedureParameters": {
+							"execution_id": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							},
+							"source_group": {
+								"type": "String",
+								"value": null
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_azsql_metadata2",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"folder": {
+			"name": "Maersk Data Centralization/Orchestration"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-09-21T15:17:55Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

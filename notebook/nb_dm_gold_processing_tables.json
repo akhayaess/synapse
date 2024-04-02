@@ -1,0 +1,184 @@
+{
+	"name": "nb_dm_gold_processing_tables",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/03_Gold"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "37979169-931a-4463-acea-5b57a9b2bbe1"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"target_table_is_incremental = 'false'\r\n",
+					"gold_schema = 'analytics'\r\n",
+					"view_name = 'temp_inbound_equipment_status_aspect'\r\n",
+					"target_container = 'gold'\r\n",
+					"target_folder = 'analytics/aspects'\r\n",
+					"target_table = 'inbound_equipment_status_aspect'\r\n",
+					"target_table_format = 'delta'\r\n",
+					"target_table_load_key = 'dimkey'"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.utils import AnalysisException"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_gold_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name')"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jdbc_url =  fetch_secret_value('wnd-namcl-asyn-jdbcurl')\r\n",
+					"connection_properties = {\r\n",
+					"    \"driver\" : \"com.microsoft.sqlserver.jdbc.SQLServerDriver\",\r\n",
+					"    \"user\" : \"Synapse_User\",\r\n",
+					"    \"password\": fetch_secret_value('wnd-namcl-asyn-pw')\r\n",
+					"}\r\n",
+					"gold_path = get_path(target_container,adls_name,target_folder,target_table)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"gold_df = gold_spark_dataframe(\r\n",
+					"    read_jdbc_table(jdbc_url, connection_properties, gold_schema, view_name)\r\n",
+					")\r\n",
+					"\r\n",
+					"if target_table_is_incremental == 'true':\r\n",
+					"    logging.info(f\"incremental load, updating {target_table} table\")\r\n",
+					"    try:\r\n",
+					"        delta_table_merge(gold_path,gold_df,target_table_load_key,'gold_created_record_datetime')\r\n",
+					"    except AnalysisException as e:\r\n",
+					"        logging.warning('Delta table does not exisits, creating...')\r\n",
+					"        write_df_to_delta(gold_df,'overwrite',gold_path)\r\n",
+					"else:\r\n",
+					"    logging.info(f\"Full load, overwriting {target_table} table\")\r\n",
+					"    write_df_to_delta(gold_df,'overwrite',gold_path)\r\n",
+					"\r\n",
+					"mssparkutils.notebook.exit({\r\n",
+					"    'source': 0,\r\n",
+					"    'target': gold_df.count()\r\n",
+					"})"
+				]
+			}
+		]
+	}
+}

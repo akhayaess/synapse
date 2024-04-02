@@ -1,0 +1,294 @@
+{
+	"name": "nb_master_silver_to_platinum",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/04_platinum"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "asppnote01",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "42cc8356-82bc-424e-a685-38cce2b89b65"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/fb2a8470-8c65-48e3-996e-2de33d8e2fff/resourceGroups/WnD_NAM_DEV_Engineering/providers/Microsoft.Synapse/workspaces/wnd-namcl-cdt-eus2-synws/bigDataPools/asppnote01",
+				"name": "asppnote01",
+				"type": "Spark",
+				"endpoint": "https://wnd-namcl-cdt-eus2-synws.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/asppnote01",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Notebook: Silver to Platinum refresh\r\n",
+					"\r\n",
+					"- Source: Delta tables (Silver)\r\n",
+					"- Target: SQL tables (Platinum)\r\n",
+					"- Purpose: refresh platinum layer.\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Input parameters\r\n",
+					"- Pipeline passes argument values"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"execution_id = 'notebook_platinum_testing_threads_pinc_20230911'\r\n",
+					"schedule_name = 'silver-to-platinum-pinc-event'"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import utilities from other notebooks\r\n",
+					"- MagicUsage: %run cannot run with other code or magic commands"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_common_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_common_platinum_utilities"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"import pandas as pd\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_timestamp\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time\r\n",
+					"from threading import Thread\r\n",
+					"from queue import Queue\r\n",
+					"from pyspark.sql import Row"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get Azure Data Lake Storage name and Azure SQL metadata db connection string"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name')\r\n",
+					"connection_string = fetch_secret_value('wnd-namcl-sql-database-cnnstr')\r\n",
+					"platinum_connection_string = fetch_secret_value('wnd-namcl-sql-database-platinum-cnnstr')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get metadata by source schedule"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"with (connect(connection_string)) as conn:\r\n",
+					"    sql_statement = f\"exec dbo.usp_get_silver_to_platinum_objects '{execution_id}','{schedule_name}'\"\r\n",
+					"    conn.execute(sql_statement)\r\n",
+					"    metadata_df = spark.createDataFrame(pd.read_sql(sql_statement,conn))\r\n",
+					"# metadata_df.count()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Sets as many threads as tables to process\r\n",
+					"worker_count = metadata_df.count()\r\n",
+					"#print(worker_count)\r\n",
+					"queue = Queue()\r\n",
+					"\r\n",
+					"# Queues every metadata table info\r\n",
+					"if worker_count > 0:\r\n",
+					"    logging.warning(f\"Data found for schedule {schedule_name}\")\r\n",
+					"    watermark = datetime.today().strftime('%Y-%m-%d %H:%M:%S')\r\n",
+					"    for i in metadata_df.collect():\r\n",
+					"        queue.put(i)\r\n",
+					"        #print(\"collection\",i)\r\n",
+					"\r\n",
+					"    # Starts threads\r\n",
+					"    logging.warning(f\"Starting threads\")\r\n",
+					"    try:\r\n",
+					"        for n in range(worker_count) :\r\n",
+					"            t = Thread(target=run_sql_merge, args=(move_to_platinum_sql, queue, watermark))\r\n",
+					"            t.daemon = False\r\n",
+					"            t.start()\r\n",
+					"    except Exception as err:\r\n",
+					"        logging.warning(f\"Error ocurred while starting threads : {err}\")\r\n",
+					"        \r\n",
+					"    logging.warning(f\"Merge running concurrently for {schedule_name}\")\r\n",
+					"    queue.join()\r\n",
+					"    logging.warning(f\"Merge finishes for {schedule_name}\")\r\n",
+					"else:\r\n",
+					"    logging.warning(f\"No data for schedule {schedule_name}\")"
+				]
+			}
+		]
+	}
+}

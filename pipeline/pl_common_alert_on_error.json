@@ -1,0 +1,280 @@
+{
+	"name": "pl_common_alert_on_error",
+	"properties": {
+		"activities": [
+			{
+				"name": "Check for errors",
+				"description": "Check for errors",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[dbo].[usp_get_execution_errors]",
+						"storedProcedureParameters": {
+							"execution_id": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().parameters.execution_id",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_azsql_metadata2",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "When errors send out alert",
+				"description": "When errors send out alert",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check for errors",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('Check for errors').output.firstRow.pipeline_error_message,null)\n",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Trigger alerting workflow",
+							"description": "Trigger alerting workflow",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Get KV distribution list",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Get KV logic app",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.00:05:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"url": {
+									"value": "@activity('Get KV logic app').output.value",
+									"type": "Expression"
+								},
+								"body": {
+									"error_message": "This is a dynamic message from the pipeline name <strong>@{pipeline().parameters.pipeline_name}</strong> for run ID <strong>@{pipeline().parameters.execution_id}</strong> and schedule name <strong>@{pipeline().parameters.schedule_name}</strong><br> Errors found: @{activity('Check for errors').output.firstRow.pipeline_error_message}",
+									"synapse_name": "@{pipeline().DataFactory}",
+									"pipeline_name": "@{pipeline().parameters.pipeline_name}",
+									"send_alert_to": "@activity('Get KV distribution list').output.value"
+								}
+							}
+						},
+						{
+							"name": "Get Key Vault",
+							"description": "Get Key Vault",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:05:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[dbo].[usp_get_global_parameter_value]",
+									"storedProcedureParameters": {
+										"gl_parameter_name": {
+											"type": "String",
+											"value": {
+												"value": "@concat('key-vault-url', if(contains(pipeline().DataFactory,'-cdt-'), '-cdt', if(contains(pipeline().DataFactory,'-tst-'), '-tst', '-prd')))",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ds_azsql_metadata2",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Get KV distribution list",
+							"description": "Get KV distribution list",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Key Vault",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Set distribution list secret",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.00:01:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat(activity('Get Key Vault').output.firstRow.gl_parameter_value,variables('distribution_list_secret'),'?api-version=',pipeline().parameters.key_vault_api_version)",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net"
+								}
+							}
+						},
+						{
+							"name": "Set distribution list secret",
+							"description": "Set distribution list secret",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "distribution_list_secret",
+								"value": "notification-distribution-list"
+							}
+						},
+						{
+							"name": "Set logic app secret",
+							"description": "Set logic app secret",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "logic_app_secret",
+								"value": "logic-app-url"
+							}
+						},
+						{
+							"name": "Get KV logic app",
+							"description": "Get KV logic app",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Key Vault",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Set logic app secret",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.00:01:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat(activity('Get Key Vault').output.firstRow.gl_parameter_value,variables('logic_app_secret'),'?api-version=',pipeline().parameters.key_vault_api_version)",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"schedule_name": {
+				"type": "string"
+			},
+			"pipeline_name": {
+				"type": "string"
+			},
+			"execution_id": {
+				"type": "string"
+			},
+			"key_vault_api_version": {
+				"type": "string",
+				"defaultValue": "7.4"
+			}
+		},
+		"variables": {
+			"azure_environment": {
+				"type": "String"
+			},
+			"Notification distribution list": {
+				"type": "String"
+			},
+			"distribution_list_secret": {
+				"type": "String"
+			},
+			"logic_app_secret": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Maersk Data Centralization/Logging"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-09-21T15:17:20Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

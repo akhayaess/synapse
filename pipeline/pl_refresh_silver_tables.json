@@ -1,0 +1,641 @@
+{
+	"name": "pl_refresh_silver_tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "Log run start",
+				"description": "Log run start",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_logging",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": false,
+					"parameters": {
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"object_type": "pipeline",
+						"object_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"event": "pipeline-start",
+						"execution_time": {
+							"value": "@utcnow()",
+							"type": "Expression"
+						},
+						"error_flag": false,
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Update schedule start",
+				"description": "Flag schedule as \"in processing\"",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Log run start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_update_schedule_exec]",
+					"storedProcedureParameters": {
+						"end_execution_time": {
+							"value": null,
+							"type": "DateTime"
+						},
+						"error_flag": {
+							"value": null,
+							"type": "Boolean"
+						},
+						"event": {
+							"value": "start",
+							"type": "String"
+						},
+						"execution_id": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"schedule_name": {
+							"value": {
+								"value": "@pipeline().parameters.schedule_name",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"start_execution_time": {
+							"value": null,
+							"type": "DateTime"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "ls_azsql_metadata",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Set processing_start",
+				"description": "Set processing_start",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Log run start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "processing_start",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Log run end by stored prodecure start failed",
+				"description": "Log run end",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Update schedule start",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_logging",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"object_type": "pipeline",
+						"object_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"event": "pipeline-end",
+						"execution_time": {
+							"value": "@utcnow()",
+							"type": "Expression"
+						},
+						"error_flag": true,
+						"error_message": "Pipeline failed because it couldn't resolve schedule name",
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "act_syn_nb_create_silver_tables",
+				"type": "SynapseNotebook",
+				"dependsOn": [
+					{
+						"activity": "Update schedule start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebook": {
+						"referenceName": "nb_master_bronze_to_silver",
+						"type": "NotebookReference"
+					},
+					"parameters": {
+						"execution_id": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"schedule_name": {
+							"value": {
+								"value": "@pipeline().parameters.schedule_name",
+								"type": "Expression"
+							},
+							"type": "string"
+						}
+					},
+					"snapshot": true,
+					"executorSize": "Small",
+					"conf": {
+						"spark.dynamicAllocation.enabled": false,
+						"spark.dynamicAllocation.minExecutors": 4,
+						"spark.dynamicAllocation.maxExecutors": 4
+					},
+					"driverSize": "Small",
+					"numExecutors": 4
+				}
+			},
+			{
+				"name": "Log Notebook Error",
+				"description": "Log Notebook Error",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_logging",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": false,
+					"parameters": {
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"object_type": "pipeline",
+						"object_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"event": "pipeline-notebook-error",
+						"execution_time": {
+							"value": "@utcnow()",
+							"type": "Expression"
+						},
+						"error_flag": true,
+						"error_message": {
+							"value": "@concat(activity('act_syn_nb_create_silver_tables').Error.message,'. Failed for:',pipeline().parameters.schedule_name)",
+							"type": "Expression"
+						},
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Update schedule end Notebook error",
+				"description": "Flag schedule as \"not processing\"",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_update_schedule_exec]",
+					"storedProcedureParameters": {
+						"end_execution_time": {
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"error_flag": {
+							"value": "true",
+							"type": "Boolean"
+						},
+						"event": {
+							"value": "end",
+							"type": "String"
+						},
+						"execution_id": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"schedule_name": {
+							"value": {
+								"value": "@pipeline().parameters.schedule_name",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"start_execution_time": {
+							"value": {
+								"value": "@variables('processing_start')",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "ls_azsql_metadata",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Log run end by notebook error",
+				"description": "Log run end",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_logging",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"object_type": "pipeline",
+						"object_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"event": "pipeline-end",
+						"execution_time": {
+							"value": "@utcnow()",
+							"type": "Expression"
+						},
+						"error_flag": true,
+						"error_message": "Pipeline failed because the notebook run failed",
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Alert on error in usp",
+				"description": "Alert on error",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Update schedule start",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_alert_on_error",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"send_alert_to": "leonardo.tizon@maersk.com",
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						},
+						"pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Alert on error in notebook",
+				"description": "Alert on error",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Log Notebook Error",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "Update schedule end Notebook error",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "Log run end by notebook error",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_alert_on_error",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"send_alert_to": "leonardo.tizon@maersk.com",
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						},
+						"pipeline_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Check for first load to create views",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.first_load,true)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Execute pipeline for create serverless views",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_refresh_silver_views",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"schedule_name": {
+										"value": "@pipeline().parameters.schedule_name",
+										"type": "Expression"
+									},
+									"adlsname": {
+										"value": "@pipeline().parameters.adlsname",
+										"type": "Expression"
+									},
+									"processing_start": {
+										"value": "@variables('processing_start')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Log run end",
+				"description": "Log run end",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_common_logging",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"execution_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"object_type": "pipeline",
+						"object_name": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"event": "pipeline-end",
+						"execution_time": {
+							"value": "@utcnow()",
+							"type": "Expression"
+						},
+						"error_flag": false,
+						"schedule_name": {
+							"value": "@pipeline().parameters.schedule_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Update schedule end",
+				"description": "Update schedule end",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "act_syn_nb_create_silver_tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_update_schedule_exec]",
+					"storedProcedureParameters": {
+						"end_execution_time": {
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"error_flag": {
+							"value": "false",
+							"type": "Boolean"
+						},
+						"event": {
+							"value": "end",
+							"type": "String"
+						},
+						"execution_id": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"schedule_name": {
+							"value": {
+								"value": "@pipeline().parameters.schedule_name",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"start_execution_time": {
+							"value": {
+								"value": "@variables('processing_start')",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "ls_azsql_metadata",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"parameters": {
+			"adlsname": {
+				"type": "string",
+				"defaultValue": "wndnamclcdteus2adl"
+			},
+			"schedule_name": {
+				"type": "string",
+				"defaultValue": "bronze-to-silver-webec-batch"
+			},
+			"first_load": {
+				"type": "bool",
+				"defaultValue": false
+			}
+		},
+		"variables": {
+			"processing_start": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Maersk Data Centralization/Data Integration/02. Bronze to Silver"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-09-21T15:17:50Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

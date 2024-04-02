@@ -1,0 +1,6 @@
+{
+	"name": "IntegrationRuntimeAdventuresWorks",
+	"properties": {
+		"type": "SelfHosted"
+	}
+}

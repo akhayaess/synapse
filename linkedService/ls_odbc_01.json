@@ -1,0 +1,28 @@
+{
+	"name": "ls_odbc_01",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "Odbc",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "ls_akv_01",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "apple"
+			},
+			"authenticationType": "Basic",
+			"userName": "rgbr",
+			"password": {
+				"type": "SecureString",
+				"value": "**********"
+			}
+		},
+		"connectVia": {
+			"referenceName": "wnd-namcl-ir-01",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

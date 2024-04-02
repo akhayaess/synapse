@@ -1,0 +1,475 @@
+{
+	"name": "nb_common_platinum_utilities",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/00_common"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "8d22f8b5-8534-4dd8-9874-6f7068b3e330"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp, expr, lit\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_date, col\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time\r\n",
+					"from threading import Thread\r\n",
+					"from queue import Queue\r\n",
+					"from pyspark.sql import Row"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def run_sql_merge(function, queue, watermark, full_load):\r\n",
+					"    '''\r\n",
+					"    Builds a dyncamic function call from arguments 'function' and 'queue'. It does not run it.\r\n",
+					"        Parameters:\r\n",
+					"            function(str):    Function name.\r\n",
+					"            queue(queue):     Queue with dataframe elements.\r\n",
+					"    '''\r\n",
+					"    while not queue.empty():\r\n",
+					"        value = queue.get()\r\n",
+					"        #print(\"value in queue:\", value)\r\n",
+					"        function(value, watermark, full_load)\r\n",
+					"        queue.task_done()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def append_sql_table(dataframe, table_schema, table_name, url, user, pw, schema,connection_string):\r\n",
+					"    '''\r\n",
+					"        Returns True if the append of the table at the SQL database run sucesfully\r\n",
+					"        Parameters:\r\n",
+					"            datframe(Spark DF) Dataframe with the data to append\r\n",
+					"            table_name(str) table name to be saved at the database\r\n",
+					"    '''\r\n",
+					"    try:\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            merge_statment = f'''\r\n",
+					"                IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{schema}') \r\n",
+					"                    EXEC('CREATE SCHEMA {schema}');\r\n",
+					"            '''\r\n",
+					"            conn.execute(merge_statment)\r\n",
+					"\r\n",
+					"        dataframe.write \\\r\n",
+					"            .format('jdbc') \\\r\n",
+					"            .mode('overwrite') \\\r\n",
+					"            .option('url', f'{url}') \\\r\n",
+					"            .option('dbtable', f'{table_schema}.{table_name}') \\\r\n",
+					"            .option('user', f'{user}') \\\r\n",
+					"            .option('password', f'{pw}') \\\r\n",
+					"            .save()\r\n",
+					"        return True\r\n",
+					"    except Exception as e:\r\n",
+					"        logging.warning(f'append failed: {str(e)}')\r\n",
+					"\r\n",
+					"        return False"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def sql_merge(target_table, source_table, matched_key, matched_cond, not_matched_cond, connection_string):\r\n",
+					"    '''\r\n",
+					"        Returns True if the SQL Server (merge) statment run sucesufully\r\n",
+					"        Parameters:\r\n",
+					"            target_table(str): Name of the target table (the one that will be updated)\r\n",
+					"            source_table(str): Name of the soure table (the one with the new information)\r\n",
+					"            matched_key(str): Conditional key to perform the Merge\r\n",
+					"            matched_cond(str): String with the columns to update when the condition matched\r\n",
+					"            not_matched_cond(str): String with the columns for the data to be inserted\r\n",
+					"    '''\r\n",
+					"    with (connect(connection_string)) as conn:\r\n",
+					"        merge_statment = f'''\r\n",
+					"            MERGE INTO {target_table} as target\r\n",
+					"                USING {source_table} as source\r\n",
+					"                    ON (source.{matched_key} = target.{matched_key})\r\n",
+					"            WHEN MATCHED THEN UPDATE SET {matched_cond}\r\n",
+					"            WHEN NOT MATCHED THEN INSERT VALUES({not_matched_cond});\r\n",
+					"        '''\r\n",
+					"        conn.execute(merge_statment)\r\n",
+					"    return merge_statment"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def sql_truncate_table(table_schema, table_name, connection_string):\r\n",
+					"    try:\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            truncate_statment = f'TRUNCATE TABLE {table_schema}.{table_name}'\r\n",
+					"            conn.execute(truncate_statment)\r\n",
+					"        return True\r\n",
+					"    except Exception as e:\r\n",
+					"        logging.warning(f'truncate failed: {str(e)}')\r\n",
+					"        return False"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def generate_update_set_platinum(column_list, exclude_list):\r\n",
+					"  '''Returns a dictionary with the keys and values to perform the update process in the UPSERT function(upsert_delta_table).\r\n",
+					"      Parameters:\r\n",
+					"        column_list(list): List with the name of the columns that are going to be updated.\r\n",
+					"        exclude_list(list): List of column names that are not going to be updated.\r\n",
+					"      Returns:\r\n",
+					"        update_dict(dict): Dictionary with the set of values that are going to be updated.'''\r\n",
+					"  update_str = [f'[target].[{column_name}] = [source].[{column_name}]' for column_name in column_list if column_name not in exclude_list]\r\n",
+					"  return str(update_str)[1:-1].replace(\"'\",'')"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def generate_insert_values_platinum(column_list):\r\n",
+					"  '''Returns a list with the column names to perform the insert process in the UPSERT function(merge).\r\n",
+					"      Parameters:\r\n",
+					"        column_list(list): List with the name of the columns that are going to be inserted.\r\n",
+					"      Returns:\r\n",
+					"        update_dict(dict): list with the colum names of values that are going to be inserted.'''\r\n",
+					"  insert_str = [f'[source].[{column_name}]' for column_name in column_list]\r\n",
+					"  return str(insert_str)[1:-1].replace(\"'\",'')"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def rename_sql_table(current_schema,current_name,new_name,schema,connection_string):\r\n",
+					"\r\n",
+					"    with (connect(connection_string)) as conn:\r\n",
+					"            merge_statment = f'''\r\n",
+					"                IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{schema}') \r\n",
+					"                    EXEC('CREATE SCHEMA {schema}');\r\n",
+					"            '''\r\n",
+					"            conn.execute(merge_statment)\r\n",
+					"    try:\r\n",
+					"        logging.warning('ALTER SCHEMA FOR NEW TABLE')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            rename_statment = f\"ALTER SCHEMA {schema} TRANSFER {current_schema}.{current_name}\"\r\n",
+					"            conn.execute(rename_statment)\r\n",
+					"        logging.warning('RENAME TABLE NAME FOR NEW TABLE')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            rename_statment = f\"EXEC sp_rename '{schema}.{current_name}','{new_name}'\"\r\n",
+					"            conn.execute(rename_statment)\r\n",
+					"        return True\r\n",
+					"    except Exception as e:\r\n",
+					"        logging.warning(f'rename failed: {str(e)}')\r\n",
+					"        return False\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def delete_records_sql_table(schema,table,connection_string):\r\n",
+					"    try:\r\n",
+					"        logging.warning('DROPING RECORDS FOR TABLE')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            drop_statment = f\"DELETE FROM {schema}.{table} WHERE delete_flag = 1\"\r\n",
+					"            conn.execute(drop_statment)\r\n",
+					"        return True\r\n",
+					"    except Exception as e:\r\n",
+					"        logging.warning(f'DROP FAILED: {str(e)}')\r\n",
+					"        return False"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def move_to_platinum_sql(i,watermark,full_load):\r\n",
+					"\r\n",
+					"    start = time()\r\n",
+					"\r\n",
+					"    table_is_incremental = i['table_is_incremental']\r\n",
+					"    source_container = i['source_container']\r\n",
+					"    object_folder = i['object_folder']\r\n",
+					"    table_name = i['table_name']\r\n",
+					"    schedule_name = i['schedule_name']\r\n",
+					"    platinum_schema = i['platinum_schema']\r\n",
+					"    \r\n",
+					"    table_load_key = i['table_load_key']\r\n",
+					"    watermark_column = i['watermark_column']\r\n",
+					"    watermark_value = i['watermark_value']\r\n",
+					"    delta_table_id = i['delta_table_id']\r\n",
+					"\r\n",
+					"    pw = fetch_secret_value('wnd-namcl-dw-asql-pw')\r\n",
+					"    user = fetch_secret_value('wnd-namcl-dw-asql-user')\r\n",
+					"    url = fetch_secret_value('wnd-namcl-dw-asql-url')\r\n",
+					"    \r\n",
+					"    try:\r\n",
+					"        logging.warning(f\"Update Process START for: {table_name.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"        silver_path = get_path(source_container,adls_name,object_folder,table_name)\r\n",
+					"        dataframe = read_delta_table(silver_path).select(\r\n",
+					"            '*',\r\n",
+					"            current_timestamp().alias('platinum_created_record_datetime'),\r\n",
+					"            current_timestamp().alias('platinum_updated_record_datetime')\r\n",
+					"        ).where(f\"silver_updated_record_datetime > '{watermark_value}'\")\r\n",
+					"        silver_count = dataframe.count()\r\n",
+					"        deletes_count = dataframe.where('delete_flag = 1').count()\r\n",
+					"\r\n",
+					"        matched_cond = generate_update_set_platinum(dataframe.columns,['silver_primary_key','platinum_created_record_datetime'])\r\n",
+					"        not_matched_cond = generate_insert_values_platinum(dataframe.columns)\r\n",
+					"\r\n",
+					"        logging.warning('Moving info to temporary table')\r\n",
+					"        append_sql_table(dataframe, f'{platinum_schema}_temp', f'{table_name}_temp', url, user, pw, f'{platinum_schema}_temp', platinum_connection_string)\r\n",
+					"        logging.warning(f'Merge operation for {table_name} in process')\r\n",
+					"        try:\r\n",
+					"            if full_load == True:\r\n",
+					"                logging.warning(f'Full load started for: {table_name}')\r\n",
+					"                append_sql_table(dataframe, platinum_schema, table_name, url, user, pw, platinum_schema, platinum_connection_string)\r\n",
+					"                query = 'overwrite table'\r\n",
+					"            else:\r\n",
+					"                if table_is_incremental == True:\r\n",
+					"                    query = sql_merge(f'{platinum_schema}.{table_name}', f'{platinum_schema}_temp.{table_name}_temp', 'silver_primary_key', matched_cond, not_matched_cond, platinum_connection_string)\r\n",
+					"                    logging.warning(f'Merge operation finished for {table_name}')\r\n",
+					"                else:\r\n",
+					"                    append_sql_table(dataframe, platinum_schema, table_name, url, user, pw, platinum_schema, platinum_connection_string)\r\n",
+					"                    query = 'overwrite table'\r\n",
+					"            logging.warning(f'truncate temporary table {platinum_schema}_temp.{table_name}_temp')\r\n",
+					"            sql_truncate_table(f'{platinum_schema}_temp', f'{table_name}_temp', platinum_connection_string)\r\n",
+					"            logging.warning(f'process finished for {table_name}')\r\n",
+					"\r\n",
+					"        except Exception as e:\r\n",
+					"            if 'Invalid object name' in str(e):\r\n",
+					"                logging.warning('Table does not exist, creating....')\r\n",
+					"                rename_sql_table(f'{platinum_schema}_temp',f'{table_name}_temp',table_name,platinum_schema,platinum_connection_string)\r\n",
+					"                logging.warning(f'Table {platinum_schema}.{table_name} created')\r\n",
+					"                query = 'CREATE TABLE'\r\n",
+					"            else:\r\n",
+					"                logging.warning(f'error general: {str(e)}')\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                    update_metadata = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                @execution_id = N'{execution_id}',\r\n",
+					"                                @schedule_name = N'{schedule_name}',\r\n",
+					"                                @container_name = N'{source_container}',\r\n",
+					"                                @folder_name = N'{object_folder}',\r\n",
+					"                                @object_name = N'{table_name}',\r\n",
+					"                                @file_name = N'{table_name}',\r\n",
+					"                                @sql_stmt = N'N/A',\r\n",
+					"                                @rows_read = 0,\r\n",
+					"                                @rows_copied = 0,\r\n",
+					"                                @duration = {time() - start},\r\n",
+					"                                @execution_time = N'{date.today()}',\r\n",
+					"                                @is_processed = false,\r\n",
+					"                                @error_message = N'{str(e).replace(\"'\",\"\")}',\r\n",
+					"                                @rows_deleted = 0,\r\n",
+					"                                @object_id = N'{delta_table_id}',\r\n",
+					"                                @database_name = N'{platinum_schema}'\r\n",
+					"\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_metadata)\r\n",
+					"                return False\r\n",
+					"        \r\n",
+					"        #delete records at the platinum layer\r\n",
+					"        if deletes_count > 0:\r\n",
+					"            delete_records_sql_table(platinum_schema,table_name,platinum_connection_string)\r\n",
+					"        else:\r\n",
+					"            logging.warning(f'there is no deletes for table: {platinum_schema}.{table_name}')\r\n",
+					"\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                            @execution_id = N'{execution_id}',\r\n",
+					"                            @schedule_name = N'{schedule_name}',\r\n",
+					"                            @container_name = N'{source_container}',\r\n",
+					"                            @folder_name = N'{object_folder}',\r\n",
+					"                            @object_name = N'{table_name}',\r\n",
+					"                            @file_name = N'{table_name}',\r\n",
+					"                            @sql_stmt = N'{query}',\r\n",
+					"                            @rows_read = {silver_count},\r\n",
+					"                            @rows_copied = {silver_count},\r\n",
+					"                            @duration = {time() - start},\r\n",
+					"                            @execution_time = N'{date.today()}',\r\n",
+					"                            @is_processed = true,\r\n",
+					"                            @error_message = NULL,\r\n",
+					"                            @rows_deleted = {deletes_count},\r\n",
+					"                            @object_id = N'{delta_table_id}',\r\n",
+					"                            @database_name = N'{platinum_schema}'\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"        \r\n",
+					"        #update watermark column\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_watermark = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_update_watermark]\r\n",
+					"                    @object_id = N'{delta_table_id}',\r\n",
+					"                    @new_watermark_value = N'{watermark}'\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_watermark)\r\n",
+					"        logging.warning(f\"Process END for: {table_name.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"        return True\r\n",
+					"    except Exception as error_general:\r\n",
+					"        logging.warning(f'error general: {str(error_general)}')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                        @execution_id = N'{execution_id}',\r\n",
+					"                        @schedule_name = N'{schedule_name}',\r\n",
+					"                        @container_name = N'{source_container}',\r\n",
+					"                        @folder_name = N'{object_folder}',\r\n",
+					"                        @object_name = N'{table_name}',\r\n",
+					"                        @file_name = N'{table_name}',\r\n",
+					"                        @sql_stmt = N'N/A',\r\n",
+					"                        @rows_read = 0,\r\n",
+					"                        @rows_copied = 0,\r\n",
+					"                        @duration = {time() - start},\r\n",
+					"                        @execution_time = N'{date.today()}',\r\n",
+					"                        @is_processed = false,\r\n",
+					"                        @error_message = N'{str(error_general).replace(\"'\",\"\")}',\r\n",
+					"                        @rows_deleted = 0,\r\n",
+					"                        @object_id = N'{delta_table_id}',\r\n",
+					"                        @database_name = N'{platinum_schema}'\r\n",
+					"\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"        logging.warning(f\"Process END for: {table_name.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"        return False"
+				]
+			}
+		]
+	}
+}

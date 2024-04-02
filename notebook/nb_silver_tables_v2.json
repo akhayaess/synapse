@@ -1,0 +1,407 @@
+{
+	"name": "nb_silver_tables_v2",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/BackUp"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "226b903e-16ce-42a7-95d8-deb119e2df6f"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Bronze to Silver Notebook\r\n",
+					"\r\n",
+					"- Read the parquet file from the source.\r\n",
+					"- Process and make some transformatios to save the table with Delta format on silver layer."
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Set up parameters.\r\n",
+					"- Parameters are passed by the pipeline"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"execution_id = 'notebook_testing_without_threads'\r\n",
+					"schedule_name = 'daily-bronze-to-silver-scale-drm'"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Run needed utilities notebooks"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_silver_utilities"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import Nedeed Libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"import pandas as pd\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_timestamp\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get Azure Data Lake Storage Name and the Connection for the SQL database"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name') \r\n",
+					"connection_string = fetch_secret_value('wnd-namcl-sql-database-cnnstr')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get metadata by the schedule"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"with (connect(connection_string)) as conn:\r\n",
+					"    sql_statement = f\"exec dbo.usp_get_bronze_to_silver_objects 'test','{schedule_name}'\"\r\n",
+					"    conn.execute(sql_statement)\r\n",
+					"    metadata_df = spark.createDataFrame(pd.read_sql(sql_statement,conn))\r\n",
+					"# metadata_df.count()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"display(metadata_df)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInRead','CORRECTED')\r\n",
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInWrite','CORRECTED')"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"new_watermark_column = current_timestamp()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"for i in metadata_df.collect():\r\n",
+					"\r\n",
+					"    target_table_is_incremental = i['target_table_is_incremental']\r\n",
+					"    source_container = i['source_container']\r\n",
+					"    source_folder = i['source_folder']\r\n",
+					"    target_container = i['target_container']\r\n",
+					"    target_folder = i['target_folder']\r\n",
+					"    target_table = i['target_table']\r\n",
+					"    target_table_format = i['target_table_format']\r\n",
+					"    target_table_load_key = i['target_table_load_key']\r\n",
+					"    schedule_name = i['schedule_name']\r\n",
+					"    source_watermark_column = i['source_watermark_column']\r\n",
+					"\r\n",
+					"    start = time()\r\n",
+					"\r\n",
+					"    bronze_path = get_path(source_container,adls_name,source_folder)\r\n",
+					"    bronze_archive_path = get_path(source_container,adls_name,source_folder,f\"{target_table}_archive\")\r\n",
+					"    silver_path = get_path(target_container,adls_name,target_folder,target_table)\r\n",
+					"\r\n",
+					"    try:\r\n",
+					"        bronze_df = spark.read.parquet(bronze_path)\r\n",
+					"        bronze_count = bronze_df.count()\r\n",
+					"\r\n",
+					"        silver_df = silver_spark_dataframe(bronze_df,target_table_load_key,target_table_is_incremental,source_watermark_column,new_watermark_column)\r\n",
+					"        silver_count = silver_df.count()\r\n",
+					"\r\n",
+					"\r\n",
+					"        if target_table_is_incremental == True:\r\n",
+					"            logging.warning(f\"incremental load, updating {target_table} table\")\r\n",
+					"            try:\r\n",
+					"                delta_table_merge(silver_path,silver_df,'silver_primary_key','silver_created_record_datetime')\r\n",
+					"            except AnalysisException as e:\r\n",
+					"                logging.warning('Delta table does not exisits, creating...')\r\n",
+					"                write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"        else:\r\n",
+					"            logging.warning(f\"Full load, overwriting {target_table} table\")\r\n",
+					"            write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"            \r\n",
+					"\r\n",
+					"        # bronze_archive_df = archive_spark_dataframe(bronze_df)\r\n",
+					"        # write_df_to_delta(bronze_archive_df,'append',bronze_archive_path)\r\n",
+					"\r\n",
+					"        # delete_file_from_adls(bronze_path,'parquet')\r\n",
+					"\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                            @execution_id = N'{execution_id}',\r\n",
+					"                            @schedule_name = N'{schedule_name}',\r\n",
+					"                            @container_name = N'{source_container}',\r\n",
+					"                            @folder_name = N'{target_folder}',\r\n",
+					"                            @object_name = N'{target_table}',\r\n",
+					"                            @file_name = N'{target_table}',\r\n",
+					"                            @sql_stmt = 'N/A',\r\n",
+					"                            @rows_read = {bronze_count},\r\n",
+					"                            @rows_copied = {silver_count},\r\n",
+					"                            @duration = {time() - start},\r\n",
+					"                            @execution_time = N'{date.today()}',\r\n",
+					"                            @is_processed = true,\r\n",
+					"                            @error_message = NULL\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"    except AnalysisException as e:\r\n",
+					"        logging.warning(f\"There is no parquet file to process for: {target_table} in path: {bronze_path}\")\r\n",
+					"        \r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                        @execution_id = N'{execution_id}',\r\n",
+					"                        @schedule_name = N'{schedule_name}',\r\n",
+					"                        @container_name = N'{source_container}',\r\n",
+					"                        @folder_name = N'{target_folder}',\r\n",
+					"                        @object_name = N'{target_table}',\r\n",
+					"                        @file_name = N'{target_table}',\r\n",
+					"                        @sql_stmt = 'N/A',\r\n",
+					"                        @rows_read = 0,\r\n",
+					"                        @rows_copied = 0,\r\n",
+					"                        @duration = {time() - start},\r\n",
+					"                        @execution_time = N'{date.today()}',\r\n",
+					"                        @is_processed = true,\r\n",
+					"                        @error_message = N'{str(e).replace(\"'\",\"\")}'\r\n",
+					"\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"    except Exception as error_general:\r\n",
+					"        print('error general')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"                update_metadata = f'''\r\n",
+					"                    DECLARE\t@return_value int\r\n",
+					"                    EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                            @execution_id = N'{execution_id}',\r\n",
+					"                            @schedule_name = N'{schedule_name}',\r\n",
+					"                            @container_name = N'{source_container}',\r\n",
+					"                            @folder_name = N'{target_folder}',\r\n",
+					"                            @object_name = N'{target_table}',\r\n",
+					"                            @file_name = N'{target_table}',\r\n",
+					"                            @sql_stmt = 'N/A',\r\n",
+					"                            @rows_read = 0,\r\n",
+					"                            @rows_copied = 0,\r\n",
+					"                            @duration = {time() - start},\r\n",
+					"                            @execution_time = N'{date.today()}',\r\n",
+					"                            @is_processed = false,\r\n",
+					"                            @error_message = N'{str(error_general).replace(\"'\",\"\")}'\r\n",
+					"\r\n",
+					"                    SELECT\t'Return Value' = @return_value\r\n",
+					"                '''\r\n",
+					"                conn.execute(update_metadata)"
+				]
+			}
+		]
+	}
+}

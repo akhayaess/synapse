@@ -1,0 +1,319 @@
+{
+	"name": "nb_comm_testing",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/BackUp"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "62aeb210-a66a-49f4-bf73-d1bd2f3d1c5d"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Notebook to testing the codes for the ETL process"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from delta.tables import DeltaTable"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def test_fetch_secret_value(secret_name):\r\n",
+					"    try:\r\n",
+					"        value = fetch_secret_value(secret_name)\r\n",
+					"    except Py4JJavaError as e:\r\n",
+					"        value = ''\r\n",
+					"    assert len(value) >= 1, f'The secret {secret_name} is not created yet'\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def test_generate_update_set(column_list,exclude_list):\r\n",
+					"\r\n",
+					"    test_set = generate_update_set(column_list,exclude_list)\r\n",
+					"    len_test = len(column_list) - len(exclude_list)\r\n",
+					"\r\n",
+					"    assert len(test_set.keys()) == len_test, f\"The columns of the exclude list are not in the dataframe's columns\"\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def test_get_path(container,adls_name, path,table_name):\r\n",
+					"\r\n",
+					"    test_path = get_path(container,adls_name, path,table_name)\r\n",
+					"    try:\r\n",
+					"        files = mssparkutils.fs.ls(test_path)\r\n",
+					"    except Py4JJavaError as e:\r\n",
+					"        files = ''\r\n",
+					"    assert len(files) >= 1 , f'The path {test_path} does not exist'\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def test_delta_table_merge(delta_path,source_df,cond_key):\r\n",
+					"    try:\r\n",
+					"        delta_table_merge(delta_path,source_df,cond_key)\r\n",
+					"        not_exists_flag = True\r\n",
+					"    except AnalysisException as e:\r\n",
+					"        not_exists_flag = False\r\n",
+					"\r\n",
+					"    delta_df = DeltaTable.forPath(spark, delta_path).toDF()\r\n",
+					"    display(delta_df)\r\n",
+					"\r\n",
+					"    assert delta_df.columns == source_df.columns, f'Warning the source DF is different to the Delta table, merge operation is going to fail'\r\n",
+					"    \r\n",
+					"    assert not_exists_flag, f'The delta table {delta_path} does not exists'\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def test_read_jdbc_table(jdbc_url, connection_properties, table_schema, table_name):\r\n",
+					"    df = read_jdbc_table(jdbc_url, connection_properties, table_schema, table_name)\r\n",
+					"    return df\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jdbc_url = 'jdbc:sqlserver://wnd-namcl-cdt-eus2-synws-ondemand.sql.azuresynapse.net:1433;database=az-syn-serverless-db-dev'\r\n",
+					"connection_properties = {\r\n",
+					"    \"driver\" : \"com.microsoft.sqlserver.jdbc.SQLServerDriver\",\r\n",
+					"    \"user\" : \"Synapse_User\",\r\n",
+					"    \"password\": fetch_secret_value('wnd-namcl-asyn-pw')\r\n",
+					"}\r\n",
+					"table_schema = 'gold'\r\n",
+					"table_name = 'temp_code_dim'"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df = test_read_jdbc_table(jdbc_url, connection_properties, table_schema, table_name)\r\n",
+					"display(df)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"delta_path = 'abfss://test@wndnamclcdteus2adl.dfs.core.windows.net/delta/table_test'\r\n",
+					"source_df = spark.sql(\"SELECT 1 ID, 'NICOLAS' NAME, 'PAVON' LAST_NAME, '26' AGE, 'DATA ENGINEER' ROLE, 'DATA CENTRALIZATION' PROJECT, CURRENT_TIMESTAMP() Created_Row_DateTime, CURRENT_TIMESTAMP() Updated_Row_DateTime UNION ALL SELECT 2 ID, 'LEONARDO' NAME, 'TIZON' LAST_NAME, '22' AGE, 'DATA ENGINEER' ROLE, 'DATA CENTRALIZATION' PROJECT, CURRENT_TIMESTAMP() Created_Row_DateTime, CURRENT_TIMESTAMP() Updated_Row_DateTime \")\r\n",
+					"cond_key = 'ID'\r\n",
+					"test_delta_table_merge(delta_path,source_df,cond_key)\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container = 'test'\r\n",
+					"adls_name = 'wndnamclcdteus2adl'\r\n",
+					"path = 'test_path'\r\n",
+					"table_name = 'test_table'\r\n",
+					"test_get_path(container,adls_name, path,table_name)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"column_list = ['col_1','col_2','col_3']\r\n",
+					"exclude_list = ['col_1']\r\n",
+					"test_generate_update_set(column_list,exclude_list)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"secret_name = 'wnd-namcl-storage-name'\r\n",
+					"test_fetch_secret_value(secret_name)"
+				]
+			}
+		]
+	}
+}

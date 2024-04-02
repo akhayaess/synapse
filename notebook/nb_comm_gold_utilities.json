@@ -1,0 +1,312 @@
+{
+	"name": "nb_comm_gold_utilities",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/00_common"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "49282247-3617-46ef-aba1-fbde21e1b72a"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Common functions to be used In the ETL process"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to mount the Azure Data Lake Storage in a temporary mount point"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def container_mount_point(container,adls_name):\r\n",
+					"    '''\r\n",
+					"        Returns a string with the mount point of the Azure Data Lake Storage.\r\n",
+					"        Parameters:\r\n",
+					"            container(str): The name of the container to be mounted.\r\n",
+					"            adls_name(str): The name of the Azure Data Lake Storage.\r\n",
+					"    '''\r\n",
+					"    try:\r\n",
+					"        mount_name = '/temp_mount'\r\n",
+					"        mssparkutils.fs.mount(  \r\n",
+					"            f\"abfss://{container}@{adls_name}.dfs.core.windows.net\",  \r\n",
+					"            mount_name,\r\n",
+					"            {\"linkedService\" : \"ls_adls_01\"}\r\n",
+					"        )\r\n",
+					"        return mount_name\r\n",
+					"    except Py4JJavaError as e:\r\n",
+					"        logging.warning('Already Mounted')\r\n",
+					"        mssparkutils.fs.unmount(mount_name)\r\n",
+					"        return container_mount_point(container,adls_name)\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Function to get the job ID from the Synapse Session."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def fetch_job_id() -> str:\r\n",
+					"    '''\r\n",
+					"        Returns a string with the value of the Synapse Job ID.\r\n",
+					"    '''\r\n",
+					"    value = mssparkutils.env.getJobId()\r\n",
+					"    return value"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Function to read a YAML file"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def read_yaml_file(job_id,mount_point,path,file_name):\r\n",
+					"    '''\r\n",
+					"        Returns a json with the metadata readed from the YAML configuration file.\r\n",
+					"        Parameters:\r\n",
+					"            job_id(str):        The Job ID from the synapse session.\r\n",
+					"            mount_point(str):   The point(path) of where the Data Lake was mounted.\r\n",
+					"            path(str):          The directory of the file.\r\n",
+					"            file_name(str):     The name of the YAML file.\r\n",
+					"    '''\r\n",
+					"    with open(f'/synfs/{job_id}/{mount_point}/{path}/{file_name}', 'r', encoding='utf-8') as f:\r\n",
+					"        table_metadata = safe_load(f)\r\n",
+					"    return table_metadata"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Function to read a table using the JDBC connection on Spark"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def read_jdbc_table(jdbc_url, connection_properties, table_schema, table_name):\r\n",
+					"    '''\r\n",
+					"        Returns a spark Data Frame with the view readed from the JDBC connection to the Azure Synpase Analytics Serverless Pool\r\n",
+					"        Parameters:\r\n",
+					"            jdbc_url(str):                  The url for the JDBC connection (database,port,server).\r\n",
+					"            connection_properties(dict):    The properties for get the connection through the JDCB connection (User,Password,Driver).\r\n",
+					"            db_schema(str):                 The table's/view's schema.\r\n",
+					"            view_name(str):                 The table's/view's name\r\n",
+					"    '''\r\n",
+					"    df = spark.read.jdbc(\r\n",
+					"        url=jdbc_url, \r\n",
+					"        table=f\"(SELECT * FROM {table_schema}.{table_name}) TEMP_TABLE\", \r\n",
+					"        properties=connection_properties\r\n",
+					"    ).distinct()\r\n",
+					"    return df"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Function to process a Gold Dataframe"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def gold_spark_dataframe(data_frame):\r\n",
+					"    '''\r\n",
+					"        Returns a DataFrame with the transformatios from Silver to Gold.\r\n",
+					"            parameters:\r\n",
+					"                data_frame(spark data frame): spark data frame with the information to be process\r\n",
+					"    '''\r\n",
+					"    df = data_frame.select(\r\n",
+					"        '*',\r\n",
+					"        current_timestamp().alias('gold_created_record_datetime'),\r\n",
+					"        current_timestamp().alias('gold_updated_record_datetime')\r\n",
+					"    ).distinct()\r\n",
+					"    return df"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def get_gold_query(datasets):\r\n",
+					"    '''\r\n",
+					"        Returns the query from the configuration file\r\n",
+					"        Parameters:\r\n",
+					"            datasets(dict): the dict from the configuration file.\r\n",
+					"    '''\r\n",
+					"    new_query = ''\r\n",
+					"    for i in datasets:\r\n",
+					"        if i == datasets[-1]:\r\n",
+					"            new_query = f\"{new_query} {i['query']}\"\r\n",
+					"        else:\r\n",
+					"            new_query = f\"{i['query']} union all {new_query}\"\r\n",
+					"    return new_query"
+				]
+			}
+		]
+	}
+}

@@ -1,0 +1,129 @@
+{
+	"name": "pl_common_logging",
+	"properties": {
+		"description": "This is a common pipeline used to write to the logs.",
+		"activities": [
+			{
+				"name": "Insert to Log",
+				"description": "Insert to Log",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.05:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_insert_audit_log]",
+					"storedProcedureParameters": {
+						"error_flag": {
+							"value": {
+								"value": "@pipeline().parameters.error_flag",
+								"type": "Expression"
+							},
+							"type": "Boolean"
+						},
+						"error_message": {
+							"value": {
+								"value": "@pipeline().parameters.error_message",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"event": {
+							"value": {
+								"value": "@pipeline().parameters.event",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"execution_id": {
+							"value": {
+								"value": "@pipeline().parameters.execution_id",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"execution_time": {
+							"value": {
+								"value": "@pipeline().parameters.execution_time",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"object_name": {
+							"value": {
+								"value": "@pipeline().parameters.object_name",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"object_type": {
+							"value": {
+								"value": "@pipeline().parameters.object_type",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"schedule_name": {
+							"value": {
+								"value": "@pipeline().parameters.schedule_name",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"sql_stmt": {
+							"value": {
+								"value": "@pipeline().parameters.sql_stmt",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "ls_azsql_metadata",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"parameters": {
+			"execution_id": {
+				"type": "string"
+			},
+			"object_type": {
+				"type": "string"
+			},
+			"object_name": {
+				"type": "string"
+			},
+			"event": {
+				"type": "string"
+			},
+			"execution_time": {
+				"type": "string"
+			},
+			"error_flag": {
+				"type": "bool"
+			},
+			"error_message": {
+				"type": "string"
+			},
+			"schedule_name": {
+				"type": "string"
+			},
+			"sql_stmt": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Maersk Data Centralization/Logging"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-09-21T15:17:03Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

@@ -1,0 +1,24 @@
+{
+	"name": "ds_sql_01",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_sql_01",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"connstr": {
+				"type": "string"
+			},
+			"connuser": {
+				"type": "string"
+			},
+			"connpw": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

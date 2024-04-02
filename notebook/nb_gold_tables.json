@@ -1,0 +1,371 @@
+{
+	"name": "nb_gold_tables",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/03_Gold"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "c94e9c91-810f-4eb8-9f54-f384cd945e2c"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Silver to Gold Notebook\r\n",
+					"\r\n",
+					"- Read the delta table from the Silver layer.\r\n",
+					"- Save the tables needed at the Gold layer."
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Set up parameters.\r\n",
+					"- Parameters are passed by the pipeline"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"execution_id = 'gold_notebook_testing'\r\n",
+					"schedule_name = 'daily-silver-to-gold-webec-batch'"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Run needed utilities notebooks"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_utilities"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_gold_utilities"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import Nedeed Libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"import pandas as pd\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get Azure Data Lake Storage Name and the Connection for the SQL database"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name') \r\n",
+					"connection_string = fetch_secret_value('wnd-namcl-sql-database-cnnstr')"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get metadata by the schedule"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# with (connect(connection_string)) as conn:\r\n",
+					"#     sql_statement = f\"exec dbo.usp_get_bronze_to_silver_objects 'test','{schedule_name}'\"\r\n",
+					"#     conn.execute(sql_statement)\r\n",
+					"#     metadata_df = spark.createDataFrame(pd.read_sql(sql_statement,conn))\r\n",
+					"\r\n",
+					"metadata_df = spark.sql('''\r\n",
+					"    SELECT\r\n",
+					"        'true' target_table_is_incremental,\r\n",
+					"        'silver' source_container,\r\n",
+					"        'webec/dbo/tables' source_folder,\r\n",
+					"        'comm_destination_tbl' source_table,\r\n",
+					"        'gold' target_container,\r\n",
+					"        'webec/dbo/tables' target_folder,\r\n",
+					"        'comm_destination_tbl' target_table,\r\n",
+					"        'delta' target_table_format,\r\n",
+					"        'dest_id' target_table_load_key,\r\n",
+					"        'daily-silver-to-gold-webec-batch' schedule_name\r\n",
+					"\r\n",
+					"''')\r\n",
+					"display(metadata_df)\r\n",
+					"# metadata_df.count()"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"for i in metadata_df.collect():\r\n",
+					"\r\n",
+					"    target_table_is_incremental = i['target_table_is_incremental']\r\n",
+					"    source_container = i['source_container']\r\n",
+					"    source_folder = i['source_folder']\r\n",
+					"    source_table = i['source_table']\r\n",
+					"    target_container = i['target_container']\r\n",
+					"    target_folder = i['target_folder']\r\n",
+					"    target_table = i['target_table']\r\n",
+					"    target_table_format = i['target_table_format']\r\n",
+					"    target_table_load_key = i['target_table_load_key']\r\n",
+					"    schedule_name = i['schedule_name']\r\n",
+					"\r\n",
+					"    start = time()\r\n",
+					"\r\n",
+					"    silver_path = get_path(source_container,adls_name,source_folder,source_table)\r\n",
+					"    gold_path = get_path(target_container,adls_name,target_folder,target_table)\r\n",
+					"\r\n",
+					"    try:\r\n",
+					"        silver_df = read_delta_table(silver_path)\r\n",
+					"        display(silver_df)\r\n",
+					"        silver_count = silver_df.count()\r\n",
+					"\r\n",
+					"        gold_df = gold_spark_dataframe(silver_df).withColumnRenamed('silver_primary_key','gold_primary_key')\r\n",
+					"        gold_count = gold_df.count()\r\n",
+					"\r\n",
+					"        if target_table_is_incremental == 'true':\r\n",
+					"            logging.warning(f\"incremental load, updating {target_table} table\")\r\n",
+					"            try:\r\n",
+					"                delta_table_merge(gold_path,gold_df,'gold_primary_key','gold_created_record_datetime')\r\n",
+					"            except AnalysisException as e:\r\n",
+					"                logging.warning('Delta table does not exisits, creating...')\r\n",
+					"                write_df_to_delta(gold_df,'overwrite',gold_path)\r\n",
+					"        else:\r\n",
+					"            logging.warning(f\"Full load, overwriting {target_table} table\")\r\n",
+					"            write_df_to_delta(gold_df,'overwrite',gold_path)\r\n",
+					"\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                            @execution_id = N'{execution_id}',\r\n",
+					"                            @schedule_name = N'{schedule_name}',\r\n",
+					"                            @container_name = N'{source_container}',\r\n",
+					"                            @folder_name = N'{target_folder}',\r\n",
+					"                            @object_name = N'{source_table}',\r\n",
+					"                            @file_name = N'{target_table}',\r\n",
+					"                            @sql_stmt = 'N/A',\r\n",
+					"                            @rows_read = {silver_count},\r\n",
+					"                            @rows_copied = {gold_count},\r\n",
+					"                            @duration = {time() - start},\r\n",
+					"                            @execution_time = N'{date.today()}',\r\n",
+					"                            @is_processed = true,\r\n",
+					"                            @error_message = NULL\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"    except AnalysisException as e:\r\n",
+					"        logging.warning(f\"There is no data to process for: {source_table} in path: {silver_path}\")\r\n",
+					"        \r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"            update_metadata = f'''\r\n",
+					"                DECLARE\t@return_value int\r\n",
+					"                EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                        @execution_id = N'{execution_id}',\r\n",
+					"                        @schedule_name = N'{schedule_name}',\r\n",
+					"                        @container_name = N'{source_container}',\r\n",
+					"                        @folder_name = N'{target_folder}',\r\n",
+					"                        @object_name = N'{target_table}',\r\n",
+					"                        @file_name = N'{target_table}',\r\n",
+					"                        @sql_stmt = 'N/A',\r\n",
+					"                        @rows_read = 0,\r\n",
+					"                        @rows_copied = 0,\r\n",
+					"                        @duration = {time() - start},\r\n",
+					"                        @execution_time = N'{date.today()}',\r\n",
+					"                        @is_processed = true,\r\n",
+					"                        @error_message = N'{str(e).replace(\"'\",\"\")}'\r\n",
+					"\r\n",
+					"                SELECT\t'Return Value' = @return_value\r\n",
+					"            '''\r\n",
+					"            conn.execute(update_metadata)\r\n",
+					"    except Exception as error_general:\r\n",
+					"        print(f'error general: {error_general}')\r\n",
+					"        with (connect(connection_string)) as conn:\r\n",
+					"                update_metadata = f'''\r\n",
+					"                    DECLARE\t@return_value int\r\n",
+					"                    EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                            @execution_id = N'{execution_id}',\r\n",
+					"                            @schedule_name = N'{schedule_name}',\r\n",
+					"                            @container_name = N'{source_container}',\r\n",
+					"                            @folder_name = N'{target_folder}',\r\n",
+					"                            @object_name = N'{source_table}',\r\n",
+					"                            @file_name = N'{target_table}',\r\n",
+					"                            @sql_stmt = 'N/A',\r\n",
+					"                            @rows_read = 0,\r\n",
+					"                            @rows_copied = 0,\r\n",
+					"                            @duration = {time() - start},\r\n",
+					"                            @execution_time = N'{date.today()}',\r\n",
+					"                            @is_processed = false,\r\n",
+					"                            @error_message = N'{str(error_general).replace(\"'\",\"\")}'\r\n",
+					"\r\n",
+					"                    SELECT\t'Return Value' = @return_value\r\n",
+					"                '''\r\n",
+					"                conn.execute(update_metadata)"
+				],
+				"execution_count": 7
+			}
+		]
+	}
+}

@@ -1,0 +1,24 @@
+{
+	"name": "ds_odbc_011",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_odbc_01",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"connstr": {
+				"type": "string"
+			},
+			"connuser": {
+				"type": "string"
+			},
+			"connpw": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "OdbcTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

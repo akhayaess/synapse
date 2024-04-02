@@ -1,0 +1,583 @@
+{
+	"name": "nb_common_silver_utilities",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/00_common"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "ede5eed5-6491-4f8a-ad68-99c3d0c2601b"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Common functions to be used In the ETL process"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp, expr, lit\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_date, col\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time\r\n",
+					"from threading import Thread\r\n",
+					"from queue import Queue\r\n",
+					"from pyspark.sql import Row"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_common_utilities"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Funtion to handle threads"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def run_merge(function, queue, watermark, full_load):\r\n",
+					"    '''\r\n",
+					"    Builds a dyncamic function call from arguments 'function' and 'queue'. It does not run it.\r\n",
+					"        Parameters:\r\n",
+					"            function(str):    Function name.\r\n",
+					"            queue(queue):     Queue with dataframe elements.\r\n",
+					"    '''\r\n",
+					"    while not queue.empty():\r\n",
+					"        value = queue.get()\r\n",
+					"        #print(\"value in queue:\", value)\r\n",
+					"        function(value, watermark, full_load)\r\n",
+					"        queue.task_done()"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Funtion to cleanse a dataframe"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def cleanse_df(data_frame,target_table_load_key,target_table_is_incremental,watermark_column,dlm_action_column):\r\n",
+					"    '''\r\n",
+					"        Returns a DataFrame with the transformatios from bronze to silver.\r\n",
+					"            parameters:\r\n",
+					"                data_frame(spark data frame): spark data frame with the information to be process\r\n",
+					"    '''\r\n",
+					"    try:\r\n",
+					"        if target_table_is_incremental == True:\r\n",
+					"            df = data_frame.select(\r\n",
+					"                '*',\r\n",
+					"                expr(f\"CONCAT_WS('||',{target_table_load_key})\").alias('silver_primary_key').astype('string'),\r\n",
+					"                current_timestamp().alias('silver_created_record_datetime'),\r\n",
+					"                current_timestamp().alias('silver_updated_record_datetime')\r\n",
+					"            ).distinct().select(\r\n",
+					"                '*',\r\n",
+					"                expr(f'ROW_NUMBER() OVER (PARTITION BY silver_primary_key ORDER BY {watermark_column} DESC)').alias('duplicated')\r\n",
+					"            ).where('duplicated = 1').drop('duplicated')\r\n",
+					"        else:\r\n",
+					"            df = data_frame.select(\r\n",
+					"                '*',\r\n",
+					"                lit(None).alias('silver_primary_key').astype('string'),\r\n",
+					"                current_timestamp().alias('silver_created_record_datetime'),\r\n",
+					"                current_timestamp().alias('silver_updated_record_datetime')\r\n",
+					"            ).distinct()\r\n",
+					"\r\n",
+					"        if dlm_action_column == None:\r\n",
+					"            df = df.select(\r\n",
+					"                '*',\r\n",
+					"                lit(False).alias('delete_flag')\r\n",
+					"            )\r\n",
+					"        else:    \r\n",
+					"            df = df.select(\r\n",
+					"                '*',\r\n",
+					"                expr(f\"CASE WHEN LOWER({dlm_action_column}) = 'delete' THEN TRUE ELSE FALSE END\").alias('delete_flag')\r\n",
+					"            )\r\n",
+					"\r\n",
+					"        return df\r\n",
+					"    except Exception as e:\r\n",
+					"        logging.warning(f'cleansing dataframe failed: {str(e)}')\r\n",
+					"        return False"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Funtion to refresh Spark delta table"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def merge_df_to_delta_table_threading(i,watermark,full_load):\r\n",
+					"    '''\r\n",
+					"        Merges data in parquet files(s) to Spark delta table.\r\n",
+					"            Parameters:\r\n",
+					"                i(array[row]):    dataframe element with metadata field values.\r\n",
+					"                new_watermark_column(column): the spark df column with the processing started datetime \r\n",
+					"    '''\r\n",
+					"\r\n",
+					"    # Assign dataframe elements to variables \r\n",
+					"    target_table_is_incremental = i['target_table_is_incremental']\r\n",
+					"    source_container = i['source_container']\r\n",
+					"    source_folder = i['source_folder']\r\n",
+					"    target_container = i['target_container']\r\n",
+					"    target_folder = i['target_folder']\r\n",
+					"    target_table = i['target_table']\r\n",
+					"    target_table_format = i['target_table_format']\r\n",
+					"    target_table_load_key = i['target_table_load_key']\r\n",
+					"    schedule_name = i['schedule_name']\r\n",
+					"    source_watermark_column = i['source_watermark_column']\r\n",
+					"    target_table_id = i['target_table_id']\r\n",
+					"    deleted_flag_column = i['deleted_flag_column']\r\n",
+					"    source_name = i['source_name']\r\n",
+					"    \r\n",
+					"    start = time()\r\n",
+					"    # Get source path\r\n",
+					"    prev_bronze_path = get_path(source_container,adls_name,source_folder)\r\n",
+					"    bronze_path = get_path(source_container,adls_name,f'{source_folder}/processing')\r\n",
+					"    # Get Archive path\r\n",
+					"    bronze_archive_path = get_path(source_container,adls_name,f'{source_folder}/archive')\r\n",
+					"    # Get target path\r\n",
+					"    silver_path = get_path(target_container,adls_name,target_folder,target_table)\r\n",
+					"\r\n",
+					"    move_file(prev_bronze_path,bronze_path,'parquet')\r\n",
+					"\r\n",
+					"    if schedule_name == 'bronze-to-silver-pinc-event':\r\n",
+					"        logging.warning('Work Around for PINC started')\r\n",
+					"        for file in mssparkutils.fs.ls(bronze_path):\r\n",
+					"            try:\r\n",
+					"                logging.warning(f\"Update Process START for: {target_table.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"                # Read all available files from source\r\n",
+					"                bronze_df = spark.read.parquet(f'{bronze_path}/{file.name}')\r\n",
+					"                bronze_count = bronze_df.count()\r\n",
+					"                \r\n",
+					"                # Cleanse source dataframe\r\n",
+					"                silver_df = cleanse_df(bronze_df,target_table_load_key,target_table_is_incremental,source_watermark_column,deleted_flag_column)\r\n",
+					"                # display(silver_df)\r\n",
+					"                silver_count = silver_df.count()\r\n",
+					"                deletes_count = silver_df.where('delete_flag = 1').count()\r\n",
+					"\r\n",
+					"                # Refresh in full or incremental depending on metadata config\r\n",
+					"                if full_load == True:\r\n",
+					"                    logging.warning(f\"Full load (overwriting) {target_table} table: Start\")\r\n",
+					"                    write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                    logging.warning(f\"Full load (overwriting) {target_table} table: End\")\r\n",
+					"                else:\r\n",
+					"                    if target_table_is_incremental == True:\r\n",
+					"                        logging.warning(f\"Incremental load (merge) for {target_table} table: Start\")\r\n",
+					"                        try:\r\n",
+					"                            delta_table_merge(silver_path,silver_df,'silver_primary_key','silver_created_record_datetime')\r\n",
+					"                            logging.warning(f\"Incremental load (merge) for {target_table} table: End\")\r\n",
+					"                        except AnalysisException as e:\r\n",
+					"                                if 'is not a Delta table' in str(e):\r\n",
+					"                                    logging.warning('Delta table does not exisits, creating...')\r\n",
+					"                                    write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                    else:\r\n",
+					"                        logging.warning(f\"Full load (overwriting) {target_table} table: Start\")\r\n",
+					"                        write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                        logging.warning(f\"Full load (overwriting) {target_table} table: End\")\r\n",
+					"\r\n",
+					"                # Archives source files\r\n",
+					"                #bronze_archive_df = archive_spark_dataframe(bronze_df)\r\n",
+					"                #write_df_to_delta(bronze_archive_df,'append',bronze_archive_path)\r\n",
+					"                #delete_file_from_adls(bronze_path,'parquet')\r\n",
+					"                move_file(bronze_path,bronze_archive_path,'parquet')\r\n",
+					"\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                    update_metadata = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                    @execution_id = N'{execution_id}',\r\n",
+					"                                    @schedule_name = N'{schedule_name}',\r\n",
+					"                                    @container_name = N'{source_container}',\r\n",
+					"                                    @folder_name = N'{target_folder}',\r\n",
+					"                                    @object_name = N'{target_table}',\r\n",
+					"                                    @file_name = N'{target_table}',\r\n",
+					"                                    @sql_stmt = 'N/A',\r\n",
+					"                                    @rows_read = {bronze_count},\r\n",
+					"                                    @rows_copied = {silver_count},\r\n",
+					"                                    @duration = {time() - start},\r\n",
+					"                                    @execution_time = N'{date.today()}',\r\n",
+					"                                    @is_processed = true,\r\n",
+					"                                    @error_message = NULL,\r\n",
+					"                                    @rows_deleted = {deletes_count},\r\n",
+					"                                    @object_id = N'{target_table_id}',\r\n",
+					"                                    @database_name = N'{source_name}'\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_metadata)\r\n",
+					"                \r\n",
+					"                #update watermark column\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                    update_watermark = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_update_watermark]\r\n",
+					"                            @object_id = N'{target_table_id}',\r\n",
+					"                            @new_watermark_value = N'{watermark}'\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_watermark)\r\n",
+					"\r\n",
+					"            except AnalysisException as e:\r\n",
+					"                if 'Path does not exist' in str(e):\r\n",
+					"                    logging.warning(f\"There is no parquet file to process for: {target_table} in path: {bronze_path}\")\r\n",
+					"                    with (connect(connection_string)) as conn:\r\n",
+					"                        update_metadata = f'''\r\n",
+					"                            DECLARE\t@return_value int\r\n",
+					"                            EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                    @execution_id = N'{execution_id}',\r\n",
+					"                                    @schedule_name = N'{schedule_name}',\r\n",
+					"                                    @container_name = N'{source_container}',\r\n",
+					"                                    @folder_name = N'{target_folder}',\r\n",
+					"                                    @object_name = N'{target_table}',\r\n",
+					"                                    @file_name = N'{target_table}',\r\n",
+					"                                    @sql_stmt = 'N/A',\r\n",
+					"                                    @rows_read = 0,\r\n",
+					"                                    @rows_copied = 0,\r\n",
+					"                                    @duration = {time() - start},\r\n",
+					"                                    @execution_time = N'{date.today()}',\r\n",
+					"                                    @is_processed = true,\r\n",
+					"                                    @error_message = N'{str(e).replace(\"'\",\"\")}',\r\n",
+					"                                    @rows_deleted = 0,\r\n",
+					"                                    @object_id = N'{target_table_id}',\r\n",
+					"                                    @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                            SELECT\t'Return Value' = @return_value\r\n",
+					"                        '''\r\n",
+					"                        conn.execute(update_metadata)\r\n",
+					"                else:\r\n",
+					"                    logging.warning(f\"Other error was raised for: {target_table} in path: {bronze_path}\")\r\n",
+					"                    with (connect(connection_string)) as conn:\r\n",
+					"                        update_metadata = f'''\r\n",
+					"                            DECLARE\t@return_value int\r\n",
+					"                            EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                    @execution_id = N'{execution_id}',\r\n",
+					"                                    @schedule_name = N'{schedule_name}',\r\n",
+					"                                    @container_name = N'{source_container}',\r\n",
+					"                                    @folder_name = N'{target_folder}',\r\n",
+					"                                    @object_name = N'{target_table}',\r\n",
+					"                                    @file_name = N'{target_table}',\r\n",
+					"                                    @sql_stmt = 'N/A',\r\n",
+					"                                    @rows_read = 0,\r\n",
+					"                                    @rows_copied = 0,\r\n",
+					"                                    @duration = {time() - start},\r\n",
+					"                                    @execution_time = N'{date.today()}',\r\n",
+					"                                    @is_processed = false,\r\n",
+					"                                    @error_message = N'{str(e).replace(\"'\",\"\")}',\r\n",
+					"                                    @rows_deleted = 0,\r\n",
+					"                                    @object_id = N'{target_table_id}',\r\n",
+					"                                    @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                            SELECT\t'Return Value' = @return_value\r\n",
+					"                        '''\r\n",
+					"                        conn.execute(update_metadata)\r\n",
+					"            except Exception as error_general:\r\n",
+					"                print('error general', error_general)\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                        update_metadata = f'''\r\n",
+					"                            DECLARE\t@return_value int\r\n",
+					"                            EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                    @execution_id = N'{execution_id}',\r\n",
+					"                                    @schedule_name = N'{schedule_name}',\r\n",
+					"                                    @container_name = N'{source_container}',\r\n",
+					"                                    @folder_name = N'{target_folder}',\r\n",
+					"                                    @object_name = N'{target_table}',\r\n",
+					"                                    @file_name = N'{target_table}',\r\n",
+					"                                    @sql_stmt = 'N/A',\r\n",
+					"                                    @rows_read = 0,\r\n",
+					"                                    @rows_copied = 0,\r\n",
+					"                                    @duration = {time() - start},\r\n",
+					"                                    @execution_time = N'{date.today()}',\r\n",
+					"                                    @is_processed = false,\r\n",
+					"                                    @error_message = N'{str(error_general).replace(\"'\",\"\")}',\r\n",
+					"                                    @rows_deleted = 0,\r\n",
+					"                                    @object_id = N'{target_table_id}',\r\n",
+					"                                    @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                            SELECT\t'Return Value' = @return_value\r\n",
+					"                        '''\r\n",
+					"                        conn.execute(update_metadata)\r\n",
+					"            logging.warning(f\"Process END for: {target_table.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"            return True\r\n",
+					"    else:\r\n",
+					"    \r\n",
+					"        try:\r\n",
+					"            logging.warning(f\"Update Process START for: {target_table.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"            # Read all available files from source\r\n",
+					"            bronze_df = spark.read.parquet(bronze_path)\r\n",
+					"            bronze_count = bronze_df.count()\r\n",
+					"            \r\n",
+					"            # Cleanse source dataframe\r\n",
+					"            silver_df = cleanse_df(bronze_df,target_table_load_key,target_table_is_incremental,source_watermark_column,deleted_flag_column)\r\n",
+					"            # display(silver_df)\r\n",
+					"            silver_count = silver_df.count()\r\n",
+					"            deletes_count = silver_df.where('delete_flag = 1').count()\r\n",
+					"\r\n",
+					"            # Refresh in full or incremental depending on metadata config\r\n",
+					"            if full_load == True:\r\n",
+					"                logging.warning(f\"Full load (overwriting) {target_table} table: Start\")\r\n",
+					"                write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                logging.warning(f\"Full load (overwriting) {target_table} table: End\")\r\n",
+					"            else:\r\n",
+					"                if target_table_is_incremental == True:\r\n",
+					"                    logging.warning(f\"Incremental load (merge) for {target_table} table: Start\")\r\n",
+					"                    try:\r\n",
+					"                        delta_table_merge(silver_path,silver_df,'silver_primary_key','silver_created_record_datetime')\r\n",
+					"                        logging.warning(f\"Incremental load (merge) for {target_table} table: End\")\r\n",
+					"                    except AnalysisException as e:\r\n",
+					"                            if 'is not a Delta table' in str(e):\r\n",
+					"                                logging.warning('Delta table does not exisits, creating...')\r\n",
+					"                                write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                else:\r\n",
+					"                    logging.warning(f\"Full load (overwriting) {target_table} table: Start\")\r\n",
+					"                    write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"                    logging.warning(f\"Full load (overwriting) {target_table} table: End\")\r\n",
+					"\r\n",
+					"            # Archives source files\r\n",
+					"            #bronze_archive_df = archive_spark_dataframe(bronze_df)\r\n",
+					"            #write_df_to_delta(bronze_archive_df,'append',bronze_archive_path)\r\n",
+					"            #delete_file_from_adls(bronze_path,'parquet')\r\n",
+					"            move_file(bronze_path,bronze_archive_path,'parquet')\r\n",
+					"\r\n",
+					"            with (connect(connection_string)) as conn:\r\n",
+					"                update_metadata = f'''\r\n",
+					"                    DECLARE\t@return_value int\r\n",
+					"                    EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                @execution_id = N'{execution_id}',\r\n",
+					"                                @schedule_name = N'{schedule_name}',\r\n",
+					"                                @container_name = N'{source_container}',\r\n",
+					"                                @folder_name = N'{target_folder}',\r\n",
+					"                                @object_name = N'{target_table}',\r\n",
+					"                                @file_name = N'{target_table}',\r\n",
+					"                                @sql_stmt = 'N/A',\r\n",
+					"                                @rows_read = {bronze_count},\r\n",
+					"                                @rows_copied = {silver_count},\r\n",
+					"                                @duration = {time() - start},\r\n",
+					"                                @execution_time = N'{date.today()}',\r\n",
+					"                                @is_processed = true,\r\n",
+					"                                @error_message = NULL,\r\n",
+					"                                @rows_deleted = {deletes_count},\r\n",
+					"                                @object_id = N'{target_table_id}',\r\n",
+					"                                @database_name = N'{source_name}'\r\n",
+					"                    SELECT\t'Return Value' = @return_value\r\n",
+					"                '''\r\n",
+					"                conn.execute(update_metadata)\r\n",
+					"            \r\n",
+					"            #update watermark column\r\n",
+					"            with (connect(connection_string)) as conn:\r\n",
+					"                update_watermark = f'''\r\n",
+					"                    DECLARE\t@return_value int\r\n",
+					"                    EXEC\t@return_value = [dbo].[usp_update_watermark]\r\n",
+					"                        @object_id = N'{target_table_id}',\r\n",
+					"                        @new_watermark_value = N'{watermark}'\r\n",
+					"                    SELECT\t'Return Value' = @return_value\r\n",
+					"                '''\r\n",
+					"                conn.execute(update_watermark)\r\n",
+					"\r\n",
+					"        except AnalysisException as e:\r\n",
+					"            if 'Path does not exist' in str(e):\r\n",
+					"                logging.warning(f\"There is no parquet file to process for: {target_table} in path: {bronze_path}\")\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                    update_metadata = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                @execution_id = N'{execution_id}',\r\n",
+					"                                @schedule_name = N'{schedule_name}',\r\n",
+					"                                @container_name = N'{source_container}',\r\n",
+					"                                @folder_name = N'{target_folder}',\r\n",
+					"                                @object_name = N'{target_table}',\r\n",
+					"                                @file_name = N'{target_table}',\r\n",
+					"                                @sql_stmt = 'N/A',\r\n",
+					"                                @rows_read = 0,\r\n",
+					"                                @rows_copied = 0,\r\n",
+					"                                @duration = {time() - start},\r\n",
+					"                                @execution_time = N'{date.today()}',\r\n",
+					"                                @is_processed = true,\r\n",
+					"                                @error_message = N'{str(e).replace(\"'\",\"\")}',\r\n",
+					"                                @rows_deleted = 0,\r\n",
+					"                                @object_id = N'{target_table_id}',\r\n",
+					"                                @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_metadata)\r\n",
+					"            else:\r\n",
+					"                logging.warning(f\"Other error was raised for: {target_table} in path: {bronze_path}\")\r\n",
+					"                with (connect(connection_string)) as conn:\r\n",
+					"                    update_metadata = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                @execution_id = N'{execution_id}',\r\n",
+					"                                @schedule_name = N'{schedule_name}',\r\n",
+					"                                @container_name = N'{source_container}',\r\n",
+					"                                @folder_name = N'{target_folder}',\r\n",
+					"                                @object_name = N'{target_table}',\r\n",
+					"                                @file_name = N'{target_table}',\r\n",
+					"                                @sql_stmt = 'N/A',\r\n",
+					"                                @rows_read = 0,\r\n",
+					"                                @rows_copied = 0,\r\n",
+					"                                @duration = {time() - start},\r\n",
+					"                                @execution_time = N'{date.today()}',\r\n",
+					"                                @is_processed = false,\r\n",
+					"                                @error_message = N'{str(e).replace(\"'\",\"\")}',\r\n",
+					"                                @rows_deleted = 0,\r\n",
+					"                                @object_id = N'{target_table_id}',\r\n",
+					"                                @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_metadata)\r\n",
+					"        except Exception as error_general:\r\n",
+					"            print('error general', error_general)\r\n",
+					"            with (connect(connection_string)) as conn:\r\n",
+					"                    update_metadata = f'''\r\n",
+					"                        DECLARE\t@return_value int\r\n",
+					"                        EXEC\t@return_value = [dbo].[usp_insert_reconcilation_log]\r\n",
+					"                                @execution_id = N'{execution_id}',\r\n",
+					"                                @schedule_name = N'{schedule_name}',\r\n",
+					"                                @container_name = N'{source_container}',\r\n",
+					"                                @folder_name = N'{target_folder}',\r\n",
+					"                                @object_name = N'{target_table}',\r\n",
+					"                                @file_name = N'{target_table}',\r\n",
+					"                                @sql_stmt = 'N/A',\r\n",
+					"                                @rows_read = 0,\r\n",
+					"                                @rows_copied = 0,\r\n",
+					"                                @duration = {time() - start},\r\n",
+					"                                @execution_time = N'{date.today()}',\r\n",
+					"                                @is_processed = false,\r\n",
+					"                                @error_message = N'{str(error_general).replace(\"'\",\"\")}',\r\n",
+					"                                @rows_deleted = 0,\r\n",
+					"                                @object_id = N'{target_table_id}',\r\n",
+					"                                @database_name = N'{source_name}'\r\n",
+					"\r\n",
+					"                        SELECT\t'Return Value' = @return_value\r\n",
+					"                    '''\r\n",
+					"                    conn.execute(update_metadata)\r\n",
+					"        logging.warning(f\"Process END for: {target_table.upper()} at: {datetime.today().strftime('%Y-%m-%d %H:%M:%S')}\")\r\n",
+					"        return True"
+				]
+			}
+		]
+	}
+}

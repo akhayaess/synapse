@@ -1,0 +1,319 @@
+{
+	"name": "nb_silver_tables",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/BackUp"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "ec0411e5-382c-43d7-b376-ae8153581215"
+			}
+		},
+		"metadata": {
+			"saveOutput": false,
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Bronze to Silver Notebook\r\n",
+					"\r\n",
+					"- Read the parquet file from the source.\r\n",
+					"- Process and make some transformatios to save the table with Delta format on silver layer."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"target_table_is_incremental = \"true\"\r\n",
+					"source_container = \"bronze\"\r\n",
+					"source_folder = \"trinium/damco/pub/consignment\"\r\n",
+					"target_container = \"silver\"\r\n",
+					"target_folder = \"trinium/damco/pub/tables\"\r\n",
+					"target_table = \"consignment\"\r\n",
+					"target_table_format = \"delta\"\r\n",
+					"target_table_load_key = \"csn_seq\"\r\n",
+					"source_watermark_column = \"csn_mod_when\""
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Read Utilities notebook"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_comm_silver_utilities"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import Nedeed Libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_timestamp\r\n",
+					"from datetime import datetime"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get Azure Data Lake Storage Name"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Set path variables to process bronze to silver"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"bronze_path = get_path(source_container,adls_name,source_folder)\r\n",
+					"bronze_archive_path = get_path(source_container,adls_name,source_folder,f'{target_table}_archive')\r\n",
+					"silver_path = get_path(target_container,adls_name,target_folder,target_table)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInRead','CORRECTED')\r\n",
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInWrite','CORRECTED')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Read, process and save the information"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"new_watermark_column = current_timestamp()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"try:\r\n",
+					"    bronze_df = spark.read.parquet(bronze_path)\r\n",
+					"    bronze_count = bronze_df.count()\r\n",
+					"\r\n",
+					"    silver_df = silver_spark_dataframe(bronze_df,target_table_load_key,target_table_is_incremental,source_watermark_column,new_watermark_column)\r\n",
+					"    silver_count = silver_df.count()\r\n",
+					"\r\n",
+					"    if target_table_is_incremental == 'true':\r\n",
+					"        logging.warning(f\"incremental load, updating {target_table} table\")\r\n",
+					"        try:\r\n",
+					"            delta_table_merge(silver_path,silver_df,'silver_primary_key','silver_created_record_datetime')\r\n",
+					"        except AnalysisException as e:\r\n",
+					"            logging.warning('Delta table does not exisits, creating...')\r\n",
+					"            write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"    else:\r\n",
+					"        logging.warning(f\"Full load, overwriting {target_table} table\")\r\n",
+					"        write_df_to_delta(silver_df,'overwrite',silver_path)\r\n",
+					"        \r\n",
+					"    bronze_archive_df = archive_spark_dataframe(bronze_df)\r\n",
+					"    write_df_to_delta(bronze_archive_df,'append',bronze_archive_path)\r\n",
+					"\r\n",
+					"    delete_file_from_adls(bronze_path,'parquet')\r\n",
+					"\r\n",
+					"    mssparkutils.notebook.exit({\r\n",
+					"        'source': bronze_count,\r\n",
+					"        'target': silver_count\r\n",
+					"    })\r\n",
+					"except AnalysisException as e:\r\n",
+					"    logging.warning(f'There is no parquet file to process for: {target_table} in path: {bronze_path}')\r\n",
+					"    mssparkutils.notebook.exit({\r\n",
+					"        'source': 0,\r\n",
+					"        'target': 0\r\n",
+					"    })"
+				]
+			}
+		]
+	}
+}

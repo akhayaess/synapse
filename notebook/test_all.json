@@ -1,0 +1,97 @@
+{
+	"name": "test_all",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/Test"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "08d7d691-b7c4-4f90-8067-4044ec7299ea"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Import the usual suspects for notebook execution."
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"# import anything specifically needed for the entire test suite here\r\n",
+					"import logging"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Run all test methods.  \r\n",
+					"\r\n",
+					"This can eventually be expanded to be a little smarter, and try to find all notebooks that end with '_test' and run those."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"logging.info(f\"Beginning TEST_ALL Notebook.\")\r\n",
+					"assert (2 + 2) == 4, f'Two plus two is still equal to four.'\r\n",
+					"assert (2 + 3) != 4, f'Two plus three is not equal to four.'\r\n",
+					"assert (1 + 1) == 2, f'One plus one is still equal to two.'\r\n",
+					"# test the common utility notebook test suite\r\n",
+					"#%run Data_Centralization/00_common/nb_comm_testing"
+				],
+				"execution_count": 4
+			}
+		]
+	}
+}

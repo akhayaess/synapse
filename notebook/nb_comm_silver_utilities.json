@@ -1,0 +1,129 @@
+{
+	"name": "nb_comm_silver_utilities",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/BackUp"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "b3834dd5-a52f-49fe-96e3-94892256c27f"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Common functions to be used In the ETL process"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp, expr, lit\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to create a Data Frame"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def silver_spark_dataframe(data_frame,target_table_load_key,target_table_is_incremental,watermark_column, new_watermark_column):\r\n",
+					"    '''\r\n",
+					"        Returns a DataFrame with the transformatios from bronze to silver.\r\n",
+					"            parameters:\r\n",
+					"                data_frame(spark data frame): spark data frame with the information to be process\r\n",
+					"    '''\r\n",
+					"    if target_table_is_incremental == 'true':\r\n",
+					"        df = data_frame.select(\r\n",
+					"            '*',\r\n",
+					"            expr(f\"CONCAT_WS('||',{target_table_load_key})\").alias('silver_primary_key').astype('string'),\r\n",
+					"            current_timestamp().alias('silver_created_record_datetime'),\r\n",
+					"            current_timestamp().alias('silver_updated_record_datetime')\r\n",
+					"        ).replace(['','nan','NA','NaT','NaN'],None).distinct().select(\r\n",
+					"            '*',\r\n",
+					"            expr(f'ROW_NUMBER() OVER (PARTITION BY silver_primary_key ORDER BY {watermark_column} DESC)').alias('duplicated')\r\n",
+					"        ).where('duplicated = 1').drop('duplicated')\r\n",
+					"    else:\r\n",
+					"        df = data_frame.select(\r\n",
+					"            '*',\r\n",
+					"            lit(None).alias('silver_primary_key').astype('string'),\r\n",
+					"            current_timestamp().alias('silver_created_record_datetime'),\r\n",
+					"            current_timestamp().alias('silver_updated_record_datetime')\r\n",
+					"        ).replace(['','nan','NA','NaT','NaN'],None).distinct()\r\n",
+					"    \r\n",
+					"    df = df.toDF(*list(map(lambda x: x.replace('-','_'), df.columns))).withColumn(watermark_column, new_watermark_column)\r\n",
+					"\r\n",
+					"    return df"
+				]
+			}
+		]
+	}
+}

@@ -1,0 +1,11 @@
+{
+	"name": "ls_akv_01",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://wnd-namcl-cdt-eus2-kv-01.vault.azure.net/"
+		}
+	}
+}

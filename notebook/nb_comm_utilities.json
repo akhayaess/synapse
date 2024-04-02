@@ -1,0 +1,352 @@
+{
+	"name": "nb_comm_utilities",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/BackUp"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "9f04da86-415e-48a2-9273-d7a493c10f6b"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Common functions to be used In the ETL process"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def generate_update_set(column_list, exclude_list):\r\n",
+					"  '''Returns a dictionary with the keys and values to perform the update process in the UPSERT function(upsert_delta_table).\r\n",
+					"      Parameters:\r\n",
+					"        column_list(list): List with the name of the columns that are going to be updated.\r\n",
+					"        exclude_list(list): List of column names that are not going to be updated.\r\n",
+					"      Returns:\r\n",
+					"        update_dict(dict): Dictionary with the set of values that are going to be updated.'''\r\n",
+					"  update_dict = {column_name : \"t.\" + column_name for column_name in column_list if column_name not in exclude_list}\r\n",
+					"  return update_dict"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to get the value from a secret on Azure Key Vault"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def fetch_secret_value(name: str) -> str:\r\n",
+					"    '''\r\n",
+					"        Returns a string with the value stored on Azure Key Vault.\r\n",
+					"            Parameters:\r\n",
+					"                name(str): Name of the secret\r\n",
+					"    '''\r\n",
+					"    value = mssparkutils.credentials.getSecretWithLS(\"ls_akv_01\",name)\r\n",
+					"    return value"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to create paths"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"def get_path(container: str,adls_name: str, path: str ,table_name: str = '') -> str:\r\n",
+					"    '''\r\n",
+					"        Returns a string with the a path to read/write files or delta tables.\r\n",
+					"            paramters:\r\n",
+					"                container(str):     The container name on the Azure Data Lake Storage.\r\n",
+					"                adls_name(str):     The Storage Account's name.\r\n",
+					"                path(str):          The full path of the table/file\r\n",
+					"                table_name(str):    If apply the table name (delta table)\r\n",
+					"    '''\r\n",
+					"    path = f'abfss://{container}@{adls_name}.dfs.core.windows.net/{path}/{table_name}'\r\n",
+					"    return path"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to create an archive dataframe"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def archive_spark_dataframe(data_frame):\r\n",
+					"    '''\r\n",
+					"        Returns a DataFrame with the bronze information appended.\r\n",
+					"            parameters:\r\n",
+					"                data_frame(spark data frame): spark data frame with the information to be archive\r\n",
+					"    '''\r\n",
+					"    df = data_frame.select(\r\n",
+					"        '*'\r\n",
+					"    ).replace(['','nan','NA','NaT','NaN'],None).distinct()\r\n",
+					"    return df"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to save/create a delta table"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def write_df_to_delta(source_df,mode: str,path: str,overwrite_schema = 'true'):\r\n",
+					"    '''\r\n",
+					"        Returns True if the write operation works. creating the delta tables needed.\r\n",
+					"        Parameters:\r\n",
+					"            source_df(spark data frame):    To dataframe to be saved.\r\n",
+					"            format(str):                    The format tyo save the table.\r\n",
+					"            mode(str):                      The type of saving to use (overwrite/append)\r\n",
+					"    '''\r\n",
+					"\r\n",
+					"    source_df.write \\\r\n",
+					"    .format('delta') \\\r\n",
+					"    .mode(mode) \\\r\n",
+					"    .option('overwriteSchema',overwrite_schema) \\\r\n",
+					"    .option('path', path) \\\r\n",
+					"    .save()\r\n",
+					"    \r\n",
+					"    return True\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"##### Function to use the merge operation from the Delta tables to Update,Insert or Delete"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def delta_table_merge(delta_path,source_df,cond_key,updated_column):\r\n",
+					"    '''\r\n",
+					"        Returns True if the merge operation (upsert) successfully.\r\n",
+					"            Parameters:\r\n",
+					"                delta_path(str):                The delta table location.\r\n",
+					"                source_df(spark data frame):    The source dataframe to be merged on the delta table.\r\n",
+					"                cond_key(str):                  The key to perform the operation (unique ID)\r\n",
+					"\r\n",
+					"    '''\r\n",
+					"\r\n",
+					"    spark.conf.set('spark.databricks.delta.schema.autoMerge.enabled','true')\r\n",
+					"\r\n",
+					"    delta_table = DeltaTable.forPath(spark, path = delta_path)\r\n",
+					"    logging.info('Updating delta table...')\r\n",
+					"    delta_table.alias('s') \\\r\n",
+					"    .merge(source_df.alias('t'), condition = f's.{cond_key} = t.{cond_key}') \\\r\n",
+					"    .whenNotMatchedInsertAll() \\\r\n",
+					"    .whenMatchedUpdate(set=generate_update_set(source_df.columns,[cond_key,updated_column])) \\\r\n",
+					"    .execute()\r\n",
+					"\r\n",
+					"    return True\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def delete_file_from_adls(file_path, file_format):\r\n",
+					"    '''\r\n",
+					"        Returns True if the delete operation for each file is successfully.\r\n",
+					"        Parameters:\r\n",
+					"            file_path(str):     The path of the Azure Data Lake where the files are located.\r\n",
+					"            file_format(str):   The format of the files to delete.    \r\n",
+					"    '''\r\n",
+					"    files = mssparkutils.fs.ls(file_path)\r\n",
+					"    for file in files:\r\n",
+					"        file_name = file.name\r\n",
+					"        if file_format in file_name:\r\n",
+					"            mssparkutils.fs.rm(f'{file_path}{file_name}')\r\n",
+					"    return True"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def read_delta_table(delta_path):\r\n",
+					"    '''\r\n",
+					"        Returns the delta table as a dataframe\r\n",
+					"    '''\r\n",
+					"    delta_table = DeltaTable.forPath(spark, path = delta_path)\r\n",
+					"    return delta_table.toDF()"
+				]
+			}
+		]
+	}
+}

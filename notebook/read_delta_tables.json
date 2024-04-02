@@ -1,0 +1,209 @@
+{
+	"name": "read_delta_tables",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/Test"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "bdacbfde-027c-4ac8-8dd7-550ea4a97d59"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from delta.tables import *"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Main URL:\r\n",
+					"abfss://< container>@<storage_name>.dfs.core.windows.net/< path>"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"microsoft": {
+						"language": "sparksql"
+					},
+					"collapsed": false
+				},
+				"source": [
+					"%%sql\r\n",
+					"SELECT\r\n",
+					"    *\r\n",
+					"FROM DELTA.`abfss://silver@wndnamclcdteus2adl.dfs.core.windows.net/webfts/hudd/dbo/tables/tblfts_billinghandlingrate`"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"query = '''\r\n",
+					"    SELECT\r\n",
+					"        *\r\n",
+					"    FROM DELTA.`abfss://silver@wndnamclcdteus2adl.dfs.core.windows.net/webec/tables/inbnd_equipment_tbl`\r\n",
+					"    WHERE Cust_ID = '126' '''\r\n",
+					"df = spark.sql(query)\r\n",
+					"display(df)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df.write.csv('abfss://silver@wndnamclcdteus2adl.dfs.core.windows.net/temp/webec/test.csv', mode='overwrite')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Read CSV"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_csv = spark.read.csv(path='c://devis_computer/temp/webec/test.csv', delimiter = ';', header = True)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_csv.write \\\r\n",
+					"    .format('delta') \\\r\n",
+					"    .mode('overwrite') \\\r\n",
+					"    .option('overwriteSchema','true') \\\r\n",
+					"    .option('path', 'abfss://silver@<>.dfs.core.windows.net/final/csv_delta') \\\r\n",
+					"    .save()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# azure blob file system sources wabss "
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df = spark.read.parquet('abfss://bronze@wndnamclcdteus2adl.dfs.core.windows.net/pinc/events/2023-07-06T020021_events.parquet')\r\n",
+					"display(df)"
+				]
+			}
+		]
+	}
+}

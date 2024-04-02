@@ -1,0 +1,574 @@
+{
+	"name": "nb_test_schema_evolution_debug",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/Test"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "264844f0-12e6-4033-abc9-02baa018d067"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"import logging\r\n",
+					"from pyspark.sql.functions import current_timestamp\r\n",
+					"from delta.tables import DeltaTable\r\n",
+					"from datetime import date, timedelta, datetime\r\n",
+					"from py4j.protocol import Py4JJavaError\r\n",
+					"from pyspark.sql.utils import AnalysisException"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Path of the delta table to test (must be remove or not move it to production)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"delta_path = 'abfss://test@wndnamclcdteus2adl.dfs.core.windows.net/delta/schema_evolution/table_test'"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### First Data Frame to save as a delta table (first load)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"test_df = spark.sql('''\r\n",
+					"    SELECT\r\n",
+					"        '1' ID,\r\n",
+					"        'NICOLAS' FIRST_NAME,\r\n",
+					"        'PAVON' LAST_NAME,\r\n",
+					"        '25' AGE,\r\n",
+					"        'DATA ENGINEER' ROLE,\r\n",
+					"        'DATA CENTRALIZATION' PROJECT,\r\n",
+					"        CURRENT_TIMESTAMP() INSERT_DATE,\r\n",
+					"        CURRENT_TIMESTAMP() UPDATE_DATE\r\n",
+					"''')\r\n",
+					"display(test_df)"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### First delta table creation"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"test_df.write \\\r\n",
+					"    .format('delta') \\\r\n",
+					"    .mode('overwrite') \\\r\n",
+					"    .option('path', delta_path) \\\r\n",
+					"    .save()"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Results:\r\n",
+					"- The table with the first loaded information and schema."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"delta_table = DeltaTable.forPath(spark, path = delta_path).toDF()\r\n",
+					"display(delta_table)"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Second Data Frame with some extra colmuns.\r\n",
+					"the dataframe is going to be to source (as the parquet files) and the idea is to add new columns to the file and check if the process still working with the auto schema evolution"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df_to_merge_new_columns = spark.sql('''\r\n",
+					"    SELECT\r\n",
+					"        '2' ID,\r\n",
+					"        'NICOLAS' FIRST_NAME,\r\n",
+					"        'PAVON' LAST_NAME,\r\n",
+					"        '25' AGE,\r\n",
+					"        'SENIOR DATA ENGINEER' ROLE,\r\n",
+					"        'DATA CENTRALIZATION' PROJECT,\r\n",
+					"        CURRENT_TIMESTAMP() INSERT_DATE,\r\n",
+					"        CURRENT_TIMESTAMP() UPDATE_DATE,\r\n",
+					"        True CURRENT_VALUE,\r\n",
+					"        'COLOMBIA' COUNTRY\r\n",
+					"''')\r\n",
+					"display(df_to_merge_new_columns)"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Note: To activate the feature we must run the next celd and enable to auto merge schema for the delta table"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.conf.set('spark.databricks.delta.schema.autoMerge.enabled','true')"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Merge Operation (Insert/Update)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"cond_key = 'ID'\r\n",
+					"delta_table = DeltaTable.forPath(spark, path = delta_path)\r\n",
+					"delta_table.alias('s') \\\r\n",
+					"    .merge(df_to_merge_new_columns.alias('t'), condition = f's.{cond_key} = t.{cond_key}') \\\r\n",
+					"    .whenNotMatchedInsertAll() \\\r\n",
+					"    .whenMatchedUpdateAll() \\\r\n",
+					"    .execute()"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Results:\r\n",
+					"- The table after the first schema change the process does not failed and added the new columuns an the new information"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"delta_table = DeltaTable.forPath(spark, path = delta_path).toDF()\r\n",
+					"display(delta_table)"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Third Dataframe with less columns.\r\n",
+					"The source is going to have less colmuns than the delta table"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df_to_merge_drop_columns = spark.sql('''\r\n",
+					"    SELECT\r\n",
+					"        '3' ID,\r\n",
+					"        'NICOLAS' FIRST_NAME,\r\n",
+					"        '25' AGE,\r\n",
+					"        'SENIOR DATA ENGINEER' ROLE,\r\n",
+					"        'DATA CENTRALIZATION' PROJECT,\r\n",
+					"        CURRENT_TIMESTAMP() INSERT_DATE,\r\n",
+					"        CURRENT_TIMESTAMP() UPDATE_DATE\r\n",
+					"''')\r\n",
+					"display(df_to_merge_drop_columns)"
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Merge Operation (Insert/Update)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"cond_key = 'ID'\r\n",
+					"delta_table = DeltaTable.forPath(spark, path = delta_path)\r\n",
+					"delta_table.alias('s') \\\r\n",
+					"    .merge(df_to_merge_drop_columns.alias('t'), condition = f's.{cond_key} = t.{cond_key}') \\\r\n",
+					"    .whenNotMatchedInsertAll() \\\r\n",
+					"    .whenMatchedUpdateAll() \\\r\n",
+					"    .execute()"
+				],
+				"execution_count": 11
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Results:\r\n",
+					"- The table after the second schema change the process does not failed and does not delete the missing colmuns but still updating and adding the new information"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"delta_table = DeltaTable.forPath(spark, path = delta_path).toDF()\r\n",
+					"display(delta_table)"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Fourth DataFrame with some changes on the columns names.\r\n",
+					"\r\n",
+					"Te source dataframe has the same number of columns than the delta table but some of them are renamed."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df_to_merge_change_columns = spark.sql('''\r\n",
+					"    SELECT\r\n",
+					"        '4' ID,\r\n",
+					"        'NICOLAS' FIRST_NAME,\r\n",
+					"        'PAVON' LAST_NAME,\r\n",
+					"        '25' AGE,\r\n",
+					"        'SENIOR DATA ENGINEER' ROLE,\r\n",
+					"        'DATA CENTRALIZATION' PROJECT,\r\n",
+					"        CURRENT_TIMESTAMP() INSERT_DATE_DATETIME,\r\n",
+					"        CURRENT_TIMESTAMP() UPDATE_DATE,\r\n",
+					"        True CURRENT_VALUE_VALID,\r\n",
+					"        'COLOMBIA' COUNTRY\r\n",
+					"''')\r\n",
+					"display(df_to_merge_change_columns)"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Merge Operation (Insert/Update)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"cond_key = 'ID'\r\n",
+					"delta_table = DeltaTable.forPath(spark, path = delta_path)\r\n",
+					"delta_table.alias('s') \\\r\n",
+					"    .merge(df_to_merge_change_columns.alias('t'), condition = f's.{cond_key} = t.{cond_key}') \\\r\n",
+					"    .whenNotMatchedInsertAll() \\\r\n",
+					"    .whenMatchedUpdateAll() \\\r\n",
+					"    .execute()"
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Results:\r\n",
+					"- The table after the third schema change the process does not failed and added the renamed columns as new ones."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"delta_table = DeltaTable.forPath(spark, path = delta_path).toDF()\r\n",
+					"display(delta_table)"
+				],
+				"execution_count": 15
+			}
+		]
+	}
+}

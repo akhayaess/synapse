@@ -1,0 +1,342 @@
+{
+	"name": "nb_master_bronze_to_silver",
+	"properties": {
+		"folder": {
+			"name": "Maersk Data Centralization/02_silver"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "asppnote01",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "c55133fe-a676-420f-9716-43347d08dd74"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "subscriptions/*/resourceGroups/*/providers/Microsoft.Synapse/workspaces/*/bigDataPools/asppnote01",
+				"name": "asppnote01",
+				"type": null,
+				"endpoint": null,
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": null,
+				"nodeCount": 0,
+				"cores": 0,
+				"memory": 0,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Notebook: Bronze to Silver refresh\r\n",
+					"\r\n",
+					"- Source: parquet files (Bronze)\r\n",
+					"- Target: Spark delta tables (Silver)\r\n",
+					"- Purpose: refresh Silver layer. It can also be extended to include any data transformation.\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Input parameters\r\n",
+					"- Pipeline passes argument values"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"execution_id = 'notebook_testing_pinc_20230914'\r\n",
+					"schedule_name = 'bronze-to-silver-webec-batch'"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import utilities from other notebooks\r\n",
+					"- MagicUsage: %run cannot run with other code or magic commands"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_common_utilities"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Maersk Data Centralization/00_common/nb_common_silver_utilities"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Import libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"import pandas as pd\r\n",
+					"from pyspark.sql.utils import AnalysisException\r\n",
+					"from pyspark.sql.functions import expr, current_timestamp\r\n",
+					"from pyodbc import connect\r\n",
+					"from datetime import date, datetime\r\n",
+					"from time import time\r\n",
+					"from threading import Thread\r\n",
+					"from queue import Queue\r\n",
+					"from pyspark.sql import Row"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get Azure Data Lake Storage name and Azure SQL metadata db connection string"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"adls_name = fetch_secret_value('wnd-namcl-storage-name') \r\n",
+					"connection_string = fetch_secret_value('wnd-namcl-sql-database-cnnstr')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Get metadata by source schedule"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"with (connect(connection_string)) as conn:\r\n",
+					"    sql_statement = f\"exec dbo.usp_get_bronze_to_silver_objects '{execution_id}','{schedule_name}'\"\r\n",
+					"    conn.execute(sql_statement)\r\n",
+					"    metadata_df = spark.createDataFrame(pd.read_sql(sql_statement,conn))\r\n",
+					"# metadata_df.count()"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Additional Spark configuration to allow processing timestamps prior to 1900"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInRead','CORRECTED')\r\n",
+					"spark.conf.set('spark.sql.parquet.int96RebaseModeInWrite','CORRECTED')"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#### Refresh Spark tables using multithreading\r\n",
+					"- Refresh a list of Spark delta tables concurrently (in parallel) using threads. The normal behaviour of looping through the list of tables ends up running one table after another (sequentially). With threads, the performance improves substuntially"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# Sets as many threads as tables to process\r\n",
+					"worker_count = metadata_df.count()\r\n",
+					"#print(worker_count)\r\n",
+					"queue = Queue()\r\n",
+					"\r\n",
+					"# Queues every metadata table info\r\n",
+					"if worker_count > 0:\r\n",
+					"    logging.warning(f\"Increments found for schedule {schedule_name}\")\r\n",
+					"    watermark = datetime.today().strftime('%Y-%m-%d %H:%M:%S')\r\n",
+					"    for i in metadata_df.collect():\r\n",
+					"        queue.put(i)\r\n",
+					"        #print(\"collection\",i)\r\n",
+					"\r\n",
+					"    # Starts threads\r\n",
+					"    logging.warning(f\"Starting threads\")\r\n",
+					"    try:\r\n",
+					"        for n in range(worker_count) :\r\n",
+					"            t = Thread(target=run_merge, args=(merge_df_to_delta_table_threading, queue, watermark))\r\n",
+					"            t.daemon = False\r\n",
+					"            t.start()\r\n",
+					"    except Exception as err:\r\n",
+					"        logging.warning(f\"Error ocurred while starting threads : {err}\")\r\n",
+					"        \r\n",
+					"    logging.warning(f\"Merge running concurrently for {schedule_name}\")\r\n",
+					"    queue.join()\r\n",
+					"    logging.warning(f\"Merge finishes for {schedule_name}\")\r\n",
+					"else:\r\n",
+					"    logging.warning(f\"No increments for schedule {schedule_name}\")"
+				]
+			}
+		]
+	}
+}
