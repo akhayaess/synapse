@@ -23,55 +23,6 @@
 		},
 		"metadata": {
 			"saveOutput": true,
-			"synapse_widget": {
-				"version": "0.1",
-				"state": {
-					"d0fa76ca-d619-4cc2-8596-5888c01a32ab": {
-						"type": "Synapse.DataFrame",
-						"sync_state": {
-							"table": {
-								"rows": [
-									{
-										"0": "date-part = 2023-06-06",
-										"1": "2023-06-06 15:34:47"
-									}
-								],
-								"schema": [
-									{
-										"key": "0",
-										"name": " File Name",
-										"type": "string"
-									},
-									{
-										"key": "1",
-										"name": "Modification Date",
-										"type": "timestamp"
-									}
-								],
-								"truncated": false
-							},
-							"isSummary": false,
-							"language": "scala"
-						},
-						"persist_state": {
-							"view": {
-								"type": "details",
-								"chartOptions": {
-									"chartType": "bar",
-									"aggregationType": "count",
-									"categoryFieldKeys": [
-										"0"
-									],
-									"seriesFieldKeys": [
-										"0"
-									],
-									"isStacked": false
-								}
-							}
-						}
-					}
-				}
-			},
 			"enableDebugMode": false,
 			"language_info": {
 				"name": "python"
