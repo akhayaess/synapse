@@ -1,0 +1,170 @@
+{
+	"name": "join_with_name_change",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "e7753d68-5031-49c8-980e-11811690e78c"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"hi\")"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from notebookutils import mssparkutils\r\n",
+					"mssparkutils.fs.mount(\r\n",
+					"    'abfss://sales@hotandcoldstorage.dfs.core.windows.net',\r\n",
+					"    '/sales',\r\n",
+					"    {'linkedService':'Azb'}\r\n",
+					")"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import datetime\r\n",
+					"from pyspark.sql import SparkSession\r\n",
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"print(jobId)\r\n",
+					"current_date = datetime.date.today()\r\n",
+					"previous_date = current_date - datetime.timedelta(days=1)\r\n",
+					"# mssparkutils.fs.ls(\"/\")\r\n",
+					"file_infos=mssparkutils.fs.ls('synfs:/'+jobId+'/sales/')\r\n",
+					"paths = [file_info.path for file_info in file_infos if '2023' in file_info.path]\r\n",
+					"file_path=[]\r\n",
+					"# Print the paths\r\n",
+					"for path in paths:\r\n",
+					"    file_path.append(path)\r\n",
+					"print(file_path)\r\n",
+					"df1=spark.read.load('synfs:/'+jobId+'/sales/*JOIN*/*.parquet')\r\n",
+					"df1.count()\r\n",
+					"\r\n",
+					"spark = SparkSession.builder \\\r\n",
+					"                        .appName(\"ReadParquet\") \\\r\n",
+					"                        .getOrCreate()\r\n",
+					"for i in file_path:\r\n",
+					"    files_rdd = spark.sparkContext.wholeTextFiles(i)\r\n",
+					"    file_count = files_rdd.count()\r\n",
+					"    print(i)\r\n",
+					"    if i.split('=')[1].strip() == str(previous_date) and file_count==1:\r\n",
+					"        print(\"hi\")\r\n",
+					"        # df=spark.read.load(i+'/*.parquet')\r\n",
+					"        # # df.show()\r\n",
+					"        # print(i)\r\n",
+					"        # print(df.count())\r\n",
+					"        # joined_df = df1.join(df, df[\"Id\"]==df1[\"Id\"], \"inner\")\r\n",
+					"        # df1.show()\r\n",
+					"        # df.show()\r\n",
+					"        # joined_df.show()\r\n",
+					"        # # df.write.format(\"parquet\").save(\"synfs:/\"+jobId+\"/sales/Test_\"+i.split('=')[1].strip())\r\n",
+					""
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"import datetime\r\n",
+					"\r\n",
+					"# Create a SparkSession\r\n",
+					"\r\n",
+					"\r\n",
+					"# Get the current date\r\n",
+					"current_date = datetime.date.today()\r\n",
+					"\r\n",
+					"# Subtract one day from the current date\r\n",
+					"previous_date = current_date - datetime.timedelta(days=1)\r\n",
+					"\r\n",
+					"\r\n",
+					"# Print the previous date\r\n",
+					"print(\"Previous date:\", previous_date)\r\n",
+					""
+				],
+				"execution_count": 16
+			}
+		]
+	}
+}

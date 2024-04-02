@@ -1,0 +1,664 @@
+{
+	"name": "nb_dr_gcss_booking_details_mod_new",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "0ecd7154-b0c1-4037-b60e-43de996f9e9f"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.sql.functions import year\r\n",
+					"from pyspark.sql.functions import to_date\r\n",
+					"from pyspark.sql.functions import *\r\n",
+					"from datetime import timedelta,datetime"
+				],
+				"execution_count": 119
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"packageStartdatetime=datetime.now()\r\n",
+					"notebookName = \"nb_dr_gcss_shipment_analysis\"\r\n",
+					""
+				],
+				"execution_count": 120
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from notebookutils import mssparkutils\r\n",
+					"mssparkutils.fs.mount(\r\n",
+					"'abfss://gcss@dlsazewpdatalakecleansed.dfs.core.windows.net',\r\n",
+					"'/gcss',\r\n",
+					"{'linkedService':'ls_maestro_prod_gen2'}\r\n",
+					")"
+				],
+				"execution_count": 121
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobID = mssparkutils.env.getJobId()"
+				],
+				"execution_count": 122
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"server = \"wdp-mit-cdt-weu-sql.database.windows.net\"\r\n",
+					"database = \"wdp-mit-metadata\"\r\n",
+					"username = \"mit_admin\"\r\n",
+					"from notebookutils import mssparkutils\r\n",
+					"# password = get_secret_value('wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"password = mssparkutils.credentials.getSecret('wdp-mit-cdt-weu-kv-01','wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"print(password)\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{server};database={database};user={username};password={password}\"\r\n",
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"dbo.audit_log\") \\\r\n",
+					"    .load()"
+				],
+				"execution_count": 123
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"# startDate=audit_data.filter(audit_data.component_name == notebookName) & (col(\"status\") == \"Success\") \\\r\n",
+					"#                                   .selectExpr(\"max(execution_end_time)\").first()[0]\r\n",
+					"# startDate=str(startDate).split(\" \")[0]\r\n",
+					"startDate=\"2018-01-01\"\r\n",
+					"endDate=\"2023-06-04\"\r\n",
+					"startDate =datetime.strptime(startDate, \"%Y-%m-%d\").date()\r\n",
+					"# startDate=startDate+timedelta(days=13)\r\n",
+					"endDate= datetime.strptime(endDate, \"%Y-%m-%d\").date()\r\n",
+					""
+				],
+				"execution_count": 124
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_gcss_shipment_reference = spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/shipment_reference/')\r\n",
+					"df_entity_type_reference_type = spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/entity_type_reference_type/')\r\n",
+					"df_equipment_assignment= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/equipment_assignment/')\r\n",
+					"df_cont_type_rkem= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/cont_type_rkem/')\r\n",
+					"df_route= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route/')\r\n",
+					"df_route_point= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route_point/')\r\n",
+					"df_route_link= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route_link/')\r\n",
+					"df_geo_site= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/geo_site/')\r\n",
+					"df_geographic_area= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/geographic_area/')\r\n",
+					"df_rkstves_part = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/rkstves_part/')\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 125
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_gcss_shipment_reference = df_gcss_shipment_reference.filter((col(\"date_part\")>=\"startDate\") & (col(\"date_part\") <= endDate))\r\n",
+					"df_equipment_assignment= df_equipment_assignment.filter((col(\"date_part\")>=\"startDate\") & (col(\"date_part\") <= endDate))\r\n",
+					"df_route= df_route.filter((col(\"date_part\")>=\"startDate\") & (col(\"date_part\") <= endDate))\r\n",
+					"df_route_point=df_route_point.filter((col(\"date_part\")>=\"startDate\") & (col(\"date_part\")<=endDate))\r\n",
+					"df_route_link= df_route_link.filter((col(\"date_part\")>=\"startDate\") & (col(\"date_part\") <= endDate))"
+				],
+				"execution_count": 126
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_gcss_shipment_reference.createOrReplaceTempView(\"shipment_reference\")\r\n",
+					"df_entity_type_reference_type.createOrReplaceTempView(\"entity_type_reference_type\")\r\n",
+					"df_equipment_assignment.createOrReplaceTempView(\"equipment_assignment\")\r\n",
+					"df_cont_type_rkem.createOrReplaceTempView(\"cont_type_rkem\")\r\n",
+					"df_route.createOrReplaceTempView(\"route\")\r\n",
+					"df_route_point.createOrReplaceTempView(\"route_point\")\r\n",
+					"df_route_link.createOrReplaceTempView(\"route_link\")\r\n",
+					"df_geo_site.createOrReplaceTempView(\"geo_site\")\r\n",
+					"df_geographic_area.createOrReplaceTempView(\"geographic_area\")\r\n",
+					"df_rkstves_part.createOrReplaceTempView(\"rkstves_part\")"
+				],
+				"execution_count": 127
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"booking_number_data=spark.sql(\"\"\"\r\n",
+					"        Select reference_string as Booking_Number\r\n",
+					"            ,create_time as Booking_Creation_Date\r\n",
+					"            ,fk_shipment_version\r\n",
+					"        FROM\r\n",
+					"\r\n",
+					"            (\r\n",
+					"                SELECT reference_string\r\n",
+					"                        ,sr.create_time\r\n",
+					"                        ,sr.fk_shipment_version\r\n",
+					"                        ,row_number()over(PARTITION by reference_string order by sr.create_time) as creation_order\r\n",
+					"                from shipment_reference sr \r\n",
+					"                INNER JOIN entity_type_reference_type etr on trim(etr.instance_id)= trim(sr.fk_entity_type_reference_type)\r\n",
+					"                WHERE etr.name='Booking Number'\r\n",
+					"            )bk\r\n",
+					"        WHERE bk.creation_order=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 128
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"df_eqp_assignment_data= spark.sql(\"\"\"\r\n",
+					"\t\t\t\t\tSELECT  container_number\r\n",
+					"\t\t\t\t\t\t\t,create_time\r\n",
+					"\t\t\t\t\t\t\t,weight_customer\r\n",
+					"\t\t\t\t\t\t\t,fk_shipment_version\r\n",
+					"\t\t\t\t\t\t\t,cosize \r\n",
+					"\t\t\t\t\t\t\t,measure\r\n",
+					"\t\t\t\t\tFROM\r\n",
+					"\t\t\t\t\t\t(\r\n",
+					"\t\t\t\t\t\t\tSELECT fk_rkemeqbc_part as container_number\r\n",
+					"\t\t\t\t\t\t\t\t\t,eq.create_time\r\n",
+					"\t\t\t\t\t\t\t\t\t,weight_customer\r\n",
+					"\t\t\t\t\t\t\t\t\t,fk_shipment_version\r\n",
+					"\t\t\t\t\t\t\t\t\t,ctr.cosize\r\n",
+					"\t\t\t\t\t\t\t\t\t,case when fk_measure_unit_weight_cust =1 then 'KGS' when fk_measure_unit_weight_cust =2 then 'US LBS' end as measure\r\n",
+					"\t\t\t\t\t\t\t\t\t,ROW_NUMBER() OVER (PARTITION BY left(fk_rkemeqbc_part,length(fk_rkemeqbc_part)-1) ORDER BY  eq.create_time) AS order_of_creation\r\n",
+					"\t\t\t\t\t\t\tFROM equipment_assignment as eq\r\n",
+					"\t\t\t\t\t\t\tINNER JOIN cont_type_rkem ctr\r\n",
+					"\t\t\t\t\t\t\ton trim(ctr.instance_id)=trim(eq.fk_cont_type_rkem)\r\n",
+					"\t\t\t\t\t\t\tWHERE fk_rkemeqbc_part  is not null \r\n",
+					"\t\t\t\t\t\t)eqa\r\n",
+					"\t\t\t\t\tWHERE eqa.order_of_creation=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 129
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"route_data=spark.sql(\"\"\"\r\n",
+					"            Select route_insatnce_id\r\n",
+					"                ,fk_shipment_version  \r\n",
+					"            FROM\r\n",
+					"            (\r\n",
+					"                Select instance_id as route_insatnce_id,fk_shipment_version,Row_Number()Over(partition by fk_shipment_version order by update_time desc) as route_order_of_creation from route \r\n",
+					"            )route_in where route_in.route_order_of_creation=1\r\n",
+					"   \"\"\")\r\n",
+					"   "
+				],
+				"execution_count": 130
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"route_point_start_data=spark.sql(\"\"\"\r\n",
+					"                 Select route_point_start.fk_route,route_point_start.instance_id,route_point_start.name as Location_Name,route_point_start.geo_area_type_name as Location_Type,layover_time  from \r\n",
+					"            (\r\n",
+					"                Select fk_route,instance_id,layover_time,Row_Number()Over(partition by fk_route,point_sequence order by update_time desc) as order_num, ga.name\r\n",
+					"                ,ga.geoid,ga.geo_area_type_name\r\n",
+					"                from route_point rp\r\n",
+					"                left join (Select * from \r\n",
+					"                            (\r\n",
+					"                            Select ROW_NUMBER()over(partition by siteid order by source_txn_commit desc ) as geo_site_order_num,* from geo_site gs\r\n",
+					"                            )gs where gs.geo_site_order_num=1)gs on rp.fk_geo_site=gs.siteid\r\n",
+					"                left join (\r\n",
+					"                            Select * from \r\n",
+					"                            (\r\n",
+					"                                Select name,geoid,geo_area_type_name,ROW_NUMBER()over(partition by geoid order by last_up_timestamp) as geo_area_order_num  from geographic_area\r\n",
+					"                            ) ga where ga.geo_area_order_num=1)ga on ga.geoid=rp.fk_geographic_area\r\n",
+					"\r\n",
+					"        \r\n",
+					"            )route_point_start\r\n",
+					"\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 131
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"route_link_data=spark.sql(\"\"\"\r\n",
+					"    Select * from \r\n",
+					"\t\t\t\t(\r\n",
+					"\t\t\t\t\tSelect ROW_NUMBER()over(partition by fk_route_point_start,fk_route_point_end order by load_txn_tm desc ) as route_link_order_num,* from route_link gs\r\n",
+					"\t\t\t\t)rl where rl.route_link_Order_num=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 132
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vsl_data = spark.sql(\"\"\"\r\n",
+					"            Select * from (\r\n",
+					"                    Select *, ROW_NUMBER() Over(partition by vessel order by source_txn_commit desc) as order_num from rkstves_part \r\n",
+					"                   )vsl where vsl.order_num=1 \r\n",
+					"                   \"\"\")"
+				],
+				"execution_count": 133
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"route_point_end_data=spark.sql(\"\"\"\r\n",
+					"Select route_point_end.fk_route,route_point_end.instance_id,route_point_end.name as Location_Name,route_point_end.geo_area_type_name as Location_Type,layover_time  from \r\n",
+					"     (\r\n",
+					"        Select fk_route,instance_id,layover_time,Row_Number()Over(partition by fk_route,point_sequence order by update_time desc) as order_num, ga.name\r\n",
+					"\t\t,ga.geoid,ga.geo_area_type_name\r\n",
+					"\t\tfrom route_point rp\r\n",
+					"\t\tleft join (Select * from \r\n",
+					"\t\t\t\t    (\r\n",
+					"\t\t\t\t\t   Select ROW_NUMBER()over(partition by siteid order by source_txn_commit desc ) as geo_site_order_num,* from geo_site gs\r\n",
+					"\t\t\t\t    )gs where gs.geo_site_order_num=1)gs on rp.fk_geo_site=gs.siteid\r\n",
+					"\t\tleft join (\r\n",
+					"\t\t\t\t\tSelect * from \r\n",
+					"\t\t\t\t\t(\r\n",
+					"\t\t                   Select name,geoid,geo_area_type_name,ROW_NUMBER()over(partition by geoid order by last_up_timestamp) as geo_area_order_num  from geographic_area\r\n",
+					"\t\t\t\t\t) ga where ga.geo_area_order_num=1)ga on ga.geoid=rp.fk_geographic_area\r\n",
+					"\r\n",
+					"  \r\n",
+					"  )route_point_end\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 134
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_eqp_assignment_data.createOrReplaceTempView(\"df_eqp_assignment_data\")\r\n",
+					"booking_number_data.createOrReplaceTempView(\"booking_number_data\")\r\n",
+					"route_link_data.createOrReplaceTempView(\"route_link_data\")\r\n",
+					"vsl_data.createOrReplaceTempView(\"vsl_data\")\r\n",
+					"route_point_end_data.createOrReplaceTempView(\"route_point_end_data\")\r\n",
+					"route_point_start_data.createOrReplaceTempView(\"route_point_start_data\")\r\n",
+					"route_data.createOrReplaceTempView(\"route_data\")"
+				],
+				"execution_count": 135
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gcss_shipment_analysis_data=spark.sql(\"\"\"\r\n",
+					" \r\n",
+					" Select  booking_number\r\n",
+					"\t\t,Booking_Creation_Date\r\n",
+					"\t\t,weight_customer\r\n",
+					"\t\t,measure as Weight_unit\r\n",
+					"\t\t,cosize as Container_size\r\n",
+					"\t\t,route.route_insatnce_id\r\n",
+					"\t\t,route_point_start.Location_Name as Start_location_name\r\n",
+					"\t\t,vsl_start.vesnam as Vessel_Name_at_starting_point\r\n",
+					"        ,vsl_start.vessel as Vessel_Code_at_starting_point\r\n",
+					"\t\t,route_point_end.Location_Name as End_location_name\r\n",
+					"\t\t,vsl_end.vesnam as Vessel_Name_at_End_point\r\n",
+					"        ,vsl_end.vessel as Vessel_code_at_End_point\r\n",
+					"\r\n",
+					" from booking_number_data as booking\r\n",
+					"   \r\n",
+					"left join df_eqp_assignment_data as equipment\r\n",
+					"  on booking.fk_shipment_version=equipment.fk_shipment_version\r\n",
+					"\r\n",
+					"left join route_data as route\r\n",
+					"   on route.fk_shipment_version=equipment.fk_shipment_version\r\n",
+					"\r\n",
+					"left join route_point_start_data as route_point_start\r\n",
+					"   on route_point_start.fk_route=route.route_insatnce_id\r\n",
+					"\r\n",
+					"left join route_link_data as route_link_start\r\n",
+					"    on route_point_start.instance_id  =route_link_start.fk_route_point_start\r\n",
+					"\r\n",
+					"left join vsl_data as vsl_start on vsl_start.vessel=route_link_start.rkst_carrier_code\r\n",
+					"\r\n",
+					"left join route_point_end_data as route_point_end\r\n",
+					"   on route_point_end.fk_route=route.route_insatnce_id\r\n",
+					"\r\n",
+					"left join route_link_data as route_link_end\r\n",
+					"    on route_point_start.instance_id  =route_link_end.fk_route_point_end\r\n",
+					"\r\n",
+					"left join vsl_data as vsl_end \r\n",
+					"    on vsl_end.vessel=route_link_end.rkst_carrier_code\r\n",
+					"\r\n",
+					"\r\n",
+					"Group by \r\n",
+					"        booking_number\r\n",
+					"\t\t,Booking_Creation_Date\r\n",
+					"\t\t,weight_customer\r\n",
+					"\t\t,measure \r\n",
+					"\t\t,cosize\r\n",
+					"\t\t,route.route_insatnce_id\r\n",
+					"\t\t,route_point_start.Location_Name \r\n",
+					"\t\t,vsl_start.vesnam \r\n",
+					"        ,vsl_start.vessel \r\n",
+					"\t\t,route_point_end.Location_Name\r\n",
+					"\t\t,vsl_end.vesnam\r\n",
+					"        ,vsl_end.vessel\r\n",
+					"\t\t\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 136
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# gcss_shipment_analysis_data.write.format(\"parquet\").mode(\"overwrite\").save('synfs:/'+jobID+'/namdl_mit/cleansed/GCSS/')"
+				],
+				"execution_count": 137
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# connection_properties = {\r\n",
+					"#  \"user\": username,\r\n",
+					"#  \"password\": password,\r\n",
+					"#  \"driver\": \"com.microsoft.sqlserver.jdbc.SQLServerDriver\"\r\n",
+					"# }\r\n",
+					"# packageEnddatetime=datetime.now()\r\n",
+					""
+				],
+				"execution_count": 138
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# from pyspark.sql import SparkSession\r\n",
+					"# from pyspark.sql.types import StructType, StructField,StringType,TimestampType\r\n",
+					"# spark = SparkSession.builder.getOrCreate()\r\n",
+					"# schema = StructType([\r\n",
+					"#     StructField(\"execution_start_time\", TimestampType(), nullable=False),\r\n",
+					"#     StructField(\"execution_end_time\", TimestampType(), nullable=False),\r\n",
+					"#     StructField(\"component_name\", StringType(), nullable=False),\r\n",
+					"#     StructField(\"error_message\", StringType(), nullable=True)\r\n",
+					"# ])\r\n",
+					"# data = [(packageStartdatetime,packageEnddatetime, notebookName ,None)]\r\n",
+					"# audit_data = spark.createDataFrame(data, schema)"
+				],
+				"execution_count": 139
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# audit_data.write.jdbc(url=jdbc_url, table=\"dbo.audit_log\", mode=\"append\", properties=connection_properties)"
+				],
+				"execution_count": 140
+			}
+		]
+	}
+}

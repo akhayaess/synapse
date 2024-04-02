@@ -1,0 +1,1351 @@
+{
+	"name": "nb_webec_equipment_analysis",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "ff1029d7-199f-4128-a906-74722e841b3a"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"%run dynamicRouting/setup/nb_environment_setup"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"packageStartdatetime=datetime.now()"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"notebookName = \"nb_webec_equipment_analysis\""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"server = \"wdp-mit-cdt-weu-sql.database.windows.net\"\r\n",
+					"database = \"wdp-mit-metadata\"\r\n",
+					"username = \"mit_admin\"\r\n",
+					"from notebookutils import mssparkutils\r\n",
+					"password = mssparkutils.credentials.getSecret('wdp-mit-cdt-weu-kv-01','wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{server};database={database};user={username};password={password}\"\r\n",
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"dbo.audit_log\") \\\r\n",
+					"    .load()\r\n",
+					""
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from datetime import timedelta\r\n",
+					"startDate=audit_data.filter(audit_data.component_name == notebookName) \\\r\n",
+					"                                  .selectExpr(\"max(execution_end_time)\").first()[0]\r\n",
+					"startDate=str(startDate).split(\" \")[0]\r\n",
+					"endDate=\"2023-06-28\"\r\n",
+					"startDate =datetime.strptime(startDate, \"%Y-%m-%d\").date()\r\n",
+					"startDate=startDate+timedelta(days=13)\r\n",
+					"endDate= datetime.strptime(endDate, \"%Y-%m-%d\").date()\r\n",
+					""
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"blob_account_name = 'wndnamclcdteus2adl'\r\n",
+					"blob_container_name = 'silver'\r\n",
+					"linked_service_name ='ls_pt_silver'\r\n",
+					"mit_linked_service=\"ls_mitcave_gen2\"\r\n",
+					"mit_storage_account = \"wdpmitcdtweuadlscave\""
+				],
+				"execution_count": 151
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"blob_sas_token = mssparkutils.credentials.getConnectionStringOrCreds(linked_service_name)\r\n",
+					"spark.conf.set('fs.azure.sas.%s.%s.blob.core.windows.net' % (blob_container_name, blob_account_name), blob_sas_token)"
+				],
+				"execution_count": 152
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('wdp-mit-cdt-weu-app-cave-container',mit_storage_account,mit_linked_service,'mit')\r\n",
+					""
+				],
+				"execution_count": 153
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobId=mssparkutils.env.getJobId()"
+				],
+				"execution_count": 154
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"realtime_blob_relative_path_inbnd_equipment = 'webec/realtime/dbo/tables/inbnd_equipment_tbl/' \r\n",
+					"realtime_wasb_path_inbnd_equipment = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, realtime_blob_relative_path_inbnd_equipment)\r\n",
+					"realtime_inbnd_equipment_data = spark.read.format(\"delta\").load(realtime_wasb_path_inbnd_equipment)\r\n",
+					""
+				],
+				"execution_count": 155
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"realtime_inbnd_equipment_data= realtime_inbnd_equipment_data.filter((\r\n",
+					"    split(col(\"silver_created_record_datetime\"), \" \")[0] > startDate) &\r\n",
+					"    (split(col(\"silver_created_record_datetime\"), \" \")[0] <= endDate))"
+				],
+				"execution_count": 88
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fileStartdatetime=realtime_inbnd_equipment_data.selectExpr(\"max(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileEnddatetime=realtime_inbnd_equipment_data.selectExpr(\"min(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileName=\"inbnd_equipment_tbl\"\r\n",
+					"realtime_inbnd_equipment_data_audit = (fileStartdatetime,fileEnddatetime, fileName ,None)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"inbnd_equipment_data = realtime_inbnd_equipment_data"
+				],
+				"execution_count": 89
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"inbnd_equipment_data.createOrReplaceTempView('inbnd_equipment_tbl')"
+				],
+				"execution_count": 90
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_blob_relative_path_inbnd_equipment_tbl_audit_equipstatusid = 'webec/batch/dbo/tables/inbnd_equipment_tbl_audit_equipstatusid/' \r\n",
+					"batch_wasb_path_inbnd_equipment_tbl_audit_equipstatusid = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, batch_blob_relative_path_inbnd_equipment_tbl_audit_equipstatusid)\r\n",
+					"batch_inbnd_equipment_tbl_audit_equipstatusid_data = spark.read.format(\"delta\").load(batch_wasb_path_inbnd_equipment_tbl_audit_equipstatusid)"
+				],
+				"execution_count": 91
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_inbnd_equipment_tbl_audit_equipstatusid_data= batch_inbnd_equipment_tbl_audit_equipstatusid_data.filter((\r\n",
+					"    split(col(\"silver_created_record_datetime\"), \" \")[0] > startDate) &\r\n",
+					"    (split(col(\"silver_created_record_datetime\"), \" \")[0] <= endDate))"
+				],
+				"execution_count": 92
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fileStartdatetime=batch_inbnd_equipment_tbl_audit_equipstatusid_data.selectExpr(\"max(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileEnddatetime=batch_inbnd_equipment_tbl_audit_equipstatusid_data.selectExpr(\"min(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileName=\"inbnd_equipment_tbl_audit_equipstatusid\"\r\n",
+					"batch_inbnd_equipment_tbl_audit_equipstatusid_data_audit = (fileStartdatetime,fileEnddatetime, fileName ,None)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"inbnd_equipment_tbl_audit_equipstatusid_data = batch_inbnd_equipment_tbl_audit_equipstatusid_data"
+				],
+				"execution_count": 93
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"inbnd_equipment_tbl_audit_equipstatusid_data.createOrReplaceTempView('inbnd_equipment_tbl_audit_equipstatusid')"
+				],
+				"execution_count": 94
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_blob_relative_path_comm_equipmentstatus_tbl = 'webec/batch/dbo/tables/comm_equipmentstatus_tbl/' \r\n",
+					"batch_wasb_path_comm_equipmentstatus_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, batch_blob_relative_path_comm_equipmentstatus_tbl)\r\n",
+					"batch_comm_equipmentstatus_tbl_data = spark.read.format(\"delta\").load(batch_wasb_path_comm_equipmentstatus_tbl)"
+				],
+				"execution_count": 95
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_equipmentstatus_tbl_data = batch_comm_equipmentstatus_tbl_data"
+				],
+				"execution_count": 96
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_equipmentstatus_tbl_data.createOrReplaceTempView('comm_equipmentstatus_tbl')"
+				],
+				"execution_count": 97
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"comm_country_tbl_data = spark.read.format(\"parquet\").load(\"synfs:/\"+jobId+\"/mit/references/country/\")\r\n",
+					"comm_country_tbl_data.createOrReplaceTempView('comm_country_tbl')"
+				],
+				"execution_count": 98
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"realtime_blob_relative_path_comm_vessel_tbl = 'webec/realtime/dbo/tables/comm_vessel_tbl/' \r\n",
+					"realtime_wasb_path_comm_vessel_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, realtime_blob_relative_path_comm_vessel_tbl)\r\n",
+					"realtime_comm_vessel_tbl_data = spark.read.format(\"delta\").load(realtime_wasb_path_comm_vessel_tbl)"
+				],
+				"execution_count": 99
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_vessel_tbl_data = realtime_comm_vessel_tbl_data"
+				],
+				"execution_count": 100
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_vessel_tbl_data.createOrReplaceTempView('comm_vessel_tbl')"
+				],
+				"execution_count": 101
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"realtime_blob_relative_path_comm_vesselvoy_tbl = 'webec/realtime/dbo/tables/comm_vesselvoy_tbl/' \r\n",
+					"realtime_wasb_path_comm_vesselvoy_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, realtime_blob_relative_path_comm_vesselvoy_tbl)\r\n",
+					"realtime_comm_vesselvoy_tbl_data = spark.read.format(\"delta\").load(realtime_wasb_path_comm_vesselvoy_tbl)\r\n",
+					""
+				],
+				"execution_count": 102
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_vesselvoy_tbl_data = realtime_comm_vesselvoy_tbl_data"
+				],
+				"execution_count": 103
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_vesselvoy_tbl_data.createOrReplaceTempView('comm_vesselVoy_tbl')"
+				],
+				"execution_count": 104
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_blob_relative_path_comm_harbor_tbl = 'webec/batch/dbo/tables/comm_harbor_tbl/' \r\n",
+					"batch_wasb_path_comm_harbor_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, batch_blob_relative_path_comm_harbor_tbl)\r\n",
+					"batch_comm_harbor_tbl_data = spark.read.format(\"delta\").load(batch_wasb_path_comm_harbor_tbl)\r\n",
+					""
+				],
+				"execution_count": 105
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_harbor_tbl_data = batch_comm_harbor_tbl_data"
+				],
+				"execution_count": 106
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_harbor_tbl_data.createOrReplaceTempView('comm_harbor_tbl')"
+				],
+				"execution_count": 107
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_blob_relative_path_comm_destination_tbl = 'webec/batch/dbo/tables/comm_destination_tbl/'\r\n",
+					"batch_wasb_path_comm_destination_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, batch_blob_relative_path_comm_destination_tbl)\r\n",
+					"batch_comm_destination_tbl_data = spark.read.format(\"delta\").load(batch_wasb_path_comm_destination_tbl)"
+				],
+				"execution_count": 127
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_destination_tbl_data = batch_comm_destination_tbl_data"
+				],
+				"execution_count": 109
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_destination_tbl_data.createOrReplaceTempView('comm_destination_tbl')"
+				],
+				"execution_count": 110
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"batch_blob_relative_path_comm_customer_tbl = 'webec/batch/dbo/tables/comm_customer_tbl/' \r\n",
+					"batch_wasb_path_comm_customer_tbl = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, batch_blob_relative_path_comm_customer_tbl)\r\n",
+					"batch_comm_customer_tbl_data = spark.read.format(\"delta\").load(batch_wasb_path_comm_customer_tbl)\r\n",
+					""
+				],
+				"execution_count": 111
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_customer_tbl_data = batch_comm_customer_tbl_data"
+				],
+				"execution_count": 112
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"comm_customer_tbl_data.createOrReplaceTempView('comm_customer_tbl')"
+				],
+				"execution_count": 113
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"blob_relative_path_walmart = 'webfts/walmart/dbo/tables/tblfts_containerheader/' \r\n",
+					"wasb_path_walmart = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, blob_relative_path_walmart)\r\n",
+					"walmart_data = spark.read.format(\"delta\").load(wasb_path_walmart)\r\n",
+					"walmart_data= walmart_data.filter((\r\n",
+					"    split(col(\"silver_created_record_datetime\"), \" \")[0] > startDate) &\r\n",
+					"    (split(col(\"silver_created_record_datetime\"), \" \")[0] <= endDate))\r\n",
+					"walmart_data.createOrReplaceTempView('walmart_fts')\r\n",
+					""
+				],
+				"execution_count": 114
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fileStartdatetime=walmart_data.selectExpr(\"max(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileEnddatetime=walmart_data.selectExpr(\"min(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileName=\"walmart_fts\"\r\n",
+					"walmart_data_audit = (fileStartdatetime,fileEnddatetime, fileName ,None)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"blob_relative_path_gap = 'webfts/gap/dbo/tables/tblFTS_ContainerHeader/' \r\n",
+					"wasb_path_gap = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, blob_relative_path_gap)\r\n",
+					"gap_data = spark.read.format(\"delta\").load(wasb_path_gap)\r\n",
+					"gap_data= gap_data.filter((\r\n",
+					"    split(col(\"silver_created_record_datetime\"), \" \")[0] > startDate) &\r\n",
+					"    (split(col(\"silver_created_record_datetime\"), \" \")[0] <= endDate))\r\n",
+					"gap_data.createOrReplaceTempView('gap_fts')\r\n",
+					""
+				],
+				"execution_count": 115
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fileStartdatetime=gap_data.selectExpr(\"max(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileEnddatetime=gap_data.selectExpr(\"min(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileName=\"gap_fts\"\r\n",
+					"gap_data_audit = (fileStartdatetime,fileEnddatetime, fileName ,None)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"blob_relative_path_hudd = 'webfts/hudd/dbo/tables/tblfts_containerheader/' \r\n",
+					"wasb_path_hudd = 'wasbs://%s@%s.blob.core.windows.net/%s' % (blob_container_name, blob_account_name, blob_relative_path_hudd)\r\n",
+					"hudd_data = spark.read.format(\"delta\").load(wasb_path_hudd)\r\n",
+					"hudd_data= hudd_data.filter((\r\n",
+					"    split(col(\"silver_created_record_datetime\"), \" \")[0] > startDate) &\r\n",
+					"    (split(col(\"silver_created_record_datetime\"), \" \")[0] <= endDate))\r\n",
+					"hudd_data.createOrReplaceTempView('hudd_fts')\r\n",
+					""
+				],
+				"execution_count": 116
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fileStartdatetime=hudd_data.selectExpr(\"max(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileEnddatetime=hudd_data.selectExpr(\"min(silver_created_record_datetime)\").first()[0]\r\n",
+					"fileName=\"hudd_fts\"\r\n",
+					"hudd_data_audit = (fileStartdatetime,fileEnddatetime, fileName ,None)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"tmpAES1_v = spark.sql( \"\"\"Select inbndequip_id,\r\n",
+					"                                inbndequip_number,\r\n",
+					"                                timeaudit,\r\n",
+					"                                equipstatus_id,\r\n",
+					"                                audit_user,\r\n",
+					"                                audit_log_type                                                                    \r\n",
+					"                            From \r\n",
+					"\t                        (SELECT                  \r\n",
+					"                             inbndequip_id,\r\n",
+					"\t\t\t\t\t\t\t inbndequip_number,\r\n",
+					"\t\t\t\t\t\t\t timeaudit,\r\n",
+					"\t\t\t\t\t\t\t equipstatus_id,\r\n",
+					"\t\t\t\t\t\t\t audit_user,\r\n",
+					"\t\t\t\t\t\t\t audit_log_type                                             \r\n",
+					"\t\t\t\t\t            FROM (SELECT inbndequip_id,\r\n",
+					"\t\t\t\t\t\t\t\t\t inbndequip_number,\r\n",
+					"\t\t\t\t\t\t\t\t\t audit_changed    AS TimeAudit,\r\n",
+					"\t\t\t\t\t\t\t\t\t equipstatus_id,\r\n",
+					"\t\t\t\t\t\t\t\t\t audit_user     AS Audit_User,\r\n",
+					"\t\t\t\t\t\t\t\t\t audit_log_type  ,                               \r\n",
+					"\t\t\t\t\t\t\t\t\t Row_number()\r\n",
+					"\t\t\t\t\t\t\t\t\t   OVER (\r\n",
+					"\t\t\t\t\t\t\t\t\t\t partition BY inbndequip_id, equipstatus_id\r\n",
+					"\t\t\t\t\t\t\t\t\t\t ORDER BY audit_log_type) AS Position\r\n",
+					"\t\t\t\t\t\t\t  FROM   inbnd_equipment_tbl_audit_equipstatusid)\r\n",
+					"\t\t\t\t\t\t\t AS TEMP\r\n",
+					"\t\t\t\t\t  WHERE  position = 1) A \"\"\")\r\n",
+					"tmpAES1_v.createOrReplaceTempView('tmpAES1')"
+				],
+				"execution_count": 117
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"tmpeqpStatus_v = spark.sql(\"\"\"Select \r\n",
+					"                                inbndequip_id\r\n",
+					"                                ,container_status\r\n",
+					"                                From(\r\n",
+					"                                    SELECT inbndequip_id,\r\n",
+					"                                    concat_ws(',', collect_list(EquipStatus_Desc)) container_status\r\n",
+					"                                    FROM (\r\n",
+					"                                        SELECT  \r\n",
+					"                                            ROW_NUMBER() OVER (PARTITION BY E.inbndequip_id ORDER BY E.timeaudit, E.Audit_log_type DESC) AS RNO\r\n",
+					"                                            ,E.inbndequip_id\r\n",
+					"                                            ,E.timeaudit\r\n",
+					"                                            ,ES. EquipStatus_Desc\r\n",
+					"                                            ,E.audit_log_type                                               \r\n",
+					"                                        FROM tmpAES1 E\r\n",
+					"                                        Left Join\r\n",
+					"                                        comm_equipmentstatus_tbl ES \r\n",
+					"                                        on  ES.EquipStatus_ID= E.equipstatus_id\r\n",
+					"                                        ORDER BY RNO\r\n",
+					"                                        ) A\r\n",
+					"                                        GROUP BY inbndequip_id,RNO \r\n",
+					"                                ) A \r\n",
+					"                            \"\"\")\r\n",
+					"tmpeqpStatus_v.createOrReplaceTempView('tmpeqpStatus')"
+				],
+				"execution_count": 118
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"tmpinbndContainer_Onwater_QuickClose_v = spark.sql(\"\"\"\r\n",
+					"                                                    Select \r\n",
+					"                                                    inbndequip_id\r\n",
+					"                                                        From(\r\n",
+					"                                                            select \r\n",
+					"                                                            inbndEquip_ID  \r\n",
+					"                                                            from (\r\n",
+					"                                                            select \r\n",
+					"                                                            ies.inbndequip_id,\r\n",
+					"                                                            ies.audit_changed,\r\n",
+					"                                                            datediff(MINUTE,ies.audit_changed,lag(ies.audit_changed) over (partition by ies.inbndequip_id order by ies.audit_changed)) as diff,\r\n",
+					"                                                            row_number() over(partition by ies.inbndequip_id order by ies.audit_changed) as RowNum \r\n",
+					"                                                            from \r\n",
+					"                                                            inbnd_equipment_tbl_audit_equipstatusid ies\r\n",
+					"                                                            left join comm_equipmentstatus_tbl es\r\n",
+					"                                                            on ies.EquipStatus_ID=es.EquipStatus_ID\r\n",
+					"                                                            where ies.inbndEquip_ID in\r\n",
+					"                                                            (Select distinct inbndequip_id from tmpeqpStatus where container_status in ('On water,Closed','Closed,On Water'))\r\n",
+					"                                                        )A\r\n",
+					"                                                        where A.RowNum=2 and A.diff<=1\r\n",
+					"                                                    )A\r\n",
+					" \"\"\")\r\n",
+					"tmpinbndContainer_Onwater_QuickClose_v.createOrReplaceTempView('tmpinbndContainer_Onwater_QuickClose')"
+				],
+				"execution_count": 119
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"tmpinbndContainer_DifferentFTS_v = spark.sql(\"\"\"\r\n",
+					"                                                Select \r\n",
+					"                                                inbndequip_id\r\n",
+					"                                                From(\r\n",
+					"                                                select DISTINCT inbndEquip_ID  \r\n",
+					"                                                    FROM (      --SELECT THD.InbndEquip_ID FROM WebFTS_THD..tblFTS_ContainerHeader THD \r\n",
+					"                                                                --UNION  \r\n",
+					"                                                                SELECT WLM.InbndEquip_ID FROM walmart_fts WLM \r\n",
+					"                                                                UNION\t\r\n",
+					"                                                                SELECT GAP.InbndEquip_ID FROM gap_fts GAP \r\n",
+					"                                                                UNION\r\n",
+					"                                                                SELECT HUDD.InbndEquip_ID FROM hudd_fts HUDD\r\n",
+					"                                                                --UNION   \r\n",
+					"                                                                --SELECT TGT.InbndEquip_ID FROM WebFTS_TGT..tblFTS_ContainerHeader TGT \r\n",
+					"                                                                --UNION  \r\n",
+					"                                                                --SELECT WMC.InbndEquip_ID FROM WebFTS_WMC..tblFTS_ContainerHeader WMC \r\n",
+					"                                                                --UNION  \r\n",
+					"                                                                -- SELECT JCP.InbndEquip_ID FROM WebFTS_JCP..tblFTS_ContainerHeader JCP \r\n",
+					"                                                                --UNION  \r\n",
+					"                                                                --SELECT SAM.InbndEquip_ID FROM WebFTS_SAMS..tblFTS_ContainerHeader SAM \r\n",
+					"                                                                --UNION\r\n",
+					"                                                                --SELECT LAT.InbndEquip_ID FROM WebFTS_SN..tblFTS_ContainerHeader LAT \r\n",
+					"\r\n",
+					"                                                        )M \r\n",
+					"                                                )FTS\"\"\")\r\n",
+					"tmpinbndContainer_DifferentFTS_v.createOrReplaceTempView('tmpinbndContainer_DifferentFTS')"
+				],
+				"execution_count": 121
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"equip_analysis = spark.sql(\"\"\"\r\n",
+					"SELECT \r\n",
+					"--Cust.Cust_Desc                      AS Customer,\r\n",
+					"IE.inbndequip_id                      AS Equipment_ID,\r\n",
+					"IE.inbndequip_number                  AS Container_Number,\r\n",
+					"IE.cust_id\t\t\t\t\t\t\t  AS Customer_ID,\r\n",
+					"Case when AES.container_status is not null\r\n",
+					"     then AES.container_status\r\n",
+					"\t else ESI.EquipStatus_Desc\r\n",
+					"\t end AS Container_Status,\r\n",
+					"CHASN.vcshippercountry                AS Origin_Country,\r\n",
+					"C.country                             AS Origin_Country_Name,\r\n",
+					"portoforigin                          AS Port_of_Discharge,\r\n",
+					"vv.vessel_name + \"/\" + vv.voyage_name AS Vessel_Voyage,\r\n",
+					"VV.vesselvoy_id,\r\n",
+					"IE.vcdischarge                        AS Discharged_Port,\r\n",
+					"H.harbor_name                         AS Harbor,\r\n",
+					"OrigDest.dest_id                      AS Original_Destination_ID,\r\n",
+					"currentdest_id                        AS Current_Location_ID,\r\n",
+					"CurrDest.dest_name                    AS Current_Location,\r\n",
+					"dispatchdest_id                       AS Dispatch_Destination_ID,\r\n",
+					"IE.docreceived_fdt                    AS DOC_Rcvd,\r\n",
+					"IE.asnreceived_fdt                    AS ASN_Received,\r\n",
+					"VV.vessel_eta_fdt                     AS ETA,\r\n",
+					"VV.vessel_ata_fdt                     AS ATA,\r\n",
+					"IE.dtdischarge                        AS Off_Vessel_Date,\r\n",
+					"IE.ready_fdt                          AS Ready_Date,\r\n",
+					"IE.equipallocation_fdt                AS Alloc_Date,\r\n",
+					"COALESCE(IE.equipeirout_fdt, IE.equipportout_fdt) AS Port_Gate_Out,\r\n",
+					"IE.equipdispatchin_fdt                AS Dispatch_Date,\r\n",
+					"IE.equipyardin_fdt                    AS Yard_Gate_In_Date,\r\n",
+					"IE.equipempty_fdt                     AS Empty_Date,\r\n",
+					"IE.equipyardout_fdt                   AS Yard_Gate_Out,\r\n",
+					"\r\n",
+					"COALESCE(IE.equipeirin_fdt,IE.equipportin_fdt) AS Port_Gate_In\r\n",
+					"\r\n",
+					" from (SELECT * from inbnd_equipment_tbl \r\n",
+					"        where inbndequip_id  not in \r\n",
+					"            (Select inbndequip_id from inbnd_equipment_tbl as IE\r\n",
+					"            LEFT JOIN comm_equipmentstatus_tbl ESI \r\n",
+					"            ON IE.equipstatus_id = ESI.equipstatus_id  Where ESI.EquipStatus_Desc ='Cancel'\r\n",
+					"            Union \r\n",
+					"            Select distinct inbndequip_id from tmpAES1 as AES1\r\n",
+					"            LEFT JOIN comm_equipmentstatus_tbl ES\r\n",
+					"            ON AES1.equipstatus_id = ES.equipstatus_id Where ES.EquipStatus_Desc ='Cancel'\r\n",
+					"            Union\r\n",
+					"            select inbndEquip_ID from tmpinbndContainer_Onwater_QuickClose\r\n",
+					"            )\r\n",
+					"\t) AS IE\r\n",
+					"    JOIN \r\n",
+					"    (SELECT Temp.InbndEquip_ID,'' AS vcSHIPPERCountry FROM tmpinbndContainer_DifferentFTS Temp \r\n",
+					"    --\tUNION SELECT CH.InbndEquip_ID,'' AS ShipperCountry FROM tblFTS_ContainerHeader CH \r\n",
+					"    ) AS CHASN\r\n",
+					"\tON CHASN.inbndequip_id = IE.inbndequip_id\r\n",
+					"    LEFT JOIN comm_country_tbl C \r\n",
+					"    ON C.code = CHASN.vcshippercountry\r\n",
+					"    LEFT JOIN comm_vessel_tbl V \r\n",
+					"    ON V.vessel_id = IE.originvessel_id\r\n",
+					"    LEFT JOIN comm_equipmentstatus_tbl ESI \r\n",
+					"    ON IE.equipstatus_id = ESI.equipstatus_id --AND ESI.EquipStatus_Desc <>'Cancel'\r\n",
+					"    LEFT JOIN comm_vesselvoy_tbl VV \r\n",
+					"    ON VV.vesselvoy_id = V.vesselvoy_id\r\n",
+					"    LEFT JOIN comm_harbor_tbl H\r\n",
+					"    ON IE.pickupharbor_id = H.harbor_id\r\n",
+					"    LEFT JOIN comm_destination_tbl MF \r\n",
+					"    ON MF.dest_id = IE.managingfacilitydest_id\r\n",
+					"    LEFT JOIN comm_destination_tbl CurrDest \r\n",
+					"    ON CurrDest.dest_id = IE.currentdest_id\r\n",
+					"    LEFT JOIN comm_destination_tbl OrigDest \r\n",
+					"    ON OrigDest.dest_id = IE.originaldest_id\r\n",
+					"    LEFT JOIN comm_destination_tbl DispDest \r\n",
+					"    ON DispDest.dest_id = IE.dispatchdest_id\r\n",
+					"    LEFT JOIN comm_customer_tbl Cust \r\n",
+					"    ON IE.cust_id = Cust.cust_id --Dropping two records\r\n",
+					"    LEFT JOIN tmpeqpStatus AS AES\r\n",
+					"    ON IE.inbndequip_id = AES.inbndequip_id\r\n",
+					"WHERE  vessel_eta_fdt >= '2018-01-01'\r\n",
+					"\r\n",
+					"GROUP  BY IE.inbndequip_id,\r\n",
+					"          IE.inbndequip_number,\r\n",
+					"\t\t  IE.cust_id,\r\n",
+					"\t\t  AES.container_status,\r\n",
+					"\t\t  ESI.EquipStatus_Desc,\r\n",
+					"          CHASN.vcshippercountry,\r\n",
+					"          C.country,\r\n",
+					"          portoforigin,\r\n",
+					"          vv.vessel_name,\r\n",
+					"          vv.voyage_name,\r\n",
+					"          VV.vesselvoy_id,\r\n",
+					"          IE.vcdischarge,\r\n",
+					"          H.harbor_name,\r\n",
+					"          OrigDest.dest_id,\r\n",
+					"          OrigDest.dest_name,\r\n",
+					"          currentdest_id,\r\n",
+					"          CurrDest.dest_name,\r\n",
+					"          dispatchdest_id,\r\n",
+					"          DispDest.dest_name,\r\n",
+					"          IE.asnreceived_fdt,\r\n",
+					"          IE.dadreceived_fdt,\r\n",
+					"          VV.vessel_eta_fdt,\r\n",
+					"          VV.vessel_ata_fdt,\r\n",
+					"          asnreceived_fdt,\r\n",
+					"          IE.docreceived_fdt,\r\n",
+					"          iE.dtdischarge,\r\n",
+					"          IE.equipallocation_fdt,\r\n",
+					"          IE.ready_fdt,\r\n",
+					"          IE.equipdispatchin_fdt,\r\n",
+					"          IE.equipeirin_fdt,\r\n",
+					"          IE.equipeirout_fdt,\r\n",
+					"          IE.equipportin_fdt,\r\n",
+					"          IE.equipportout_fdt,\r\n",
+					"          IE.equipyardin_fdt,\r\n",
+					"          IE.equipyardout_fdt,\r\n",
+					"          IE.equipempty_fdt,\r\n",
+					"          IE.equipreload_fdt,\r\n",
+					"          IE.equipdispatchout_fdt,\r\n",
+					"          IE.los_dt\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"    \r\n",
+					"\t  \r\n",
+					"\t\t\t \"\"\")"
+				],
+				"execution_count": 122
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"equip_analysis.createOrReplaceTempView('equip_analysis')"
+				],
+				"execution_count": 123
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"current_date=\"2023-07-01\""
+				],
+				"execution_count": 124
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"write_path = 'synfs:/' + jobId + '/mit/webec/' + current_date + '/'"
+				],
+				"execution_count": 125
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"equip_analysis.write.format(\"parquet\").mode(\"overwrite\").save(write_path)"
+				],
+				"execution_count": 126
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"connection_properties = {\r\n",
+					"    \"user\": username,\r\n",
+					"    \"password\": password,\r\n",
+					"    \"driver\": \"com.microsoft.sqlserver.jdbc.SQLServerDriver\"\r\n",
+					"}\r\n",
+					"packageEnddatetime=datetime.now()\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 156
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.types import StructType, StructField,StringType,TimestampType\r\n",
+					"spark = SparkSession.builder.getOrCreate()\r\n",
+					"schema = StructType([\r\n",
+					"    StructField(\"execution_start_time\", TimestampType(), nullable=False),\r\n",
+					"    StructField(\"execution_end_time\", TimestampType(), nullable=False),\r\n",
+					"    StructField(\"component_name\", StringType(), nullable=False),\r\n",
+					"    StructField(\"error_message\", StringType(), nullable=True)\r\n",
+					"])\r\n",
+					"data = [realtime_inbnd_equipment_data_audit,batch_inbnd_equipment_tbl_audit_equipstatusid_data_audit,walmart_data_audit,gap_data_audit,hudd_data_audit]\r\n",
+					"audit_data = spark.createDataFrame(data, schema)\r\n",
+					""
+				],
+				"execution_count": 157
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"audit_data.write.jdbc(url=jdbc_url, table=\"dbo.audit_log\", mode=\"append\", properties=connection_properties)\r\n",
+					""
+				],
+				"execution_count": 158
+			}
+		]
+	}
+}

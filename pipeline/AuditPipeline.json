@@ -1,0 +1,199 @@
+{
+	"name": "AuditPipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "NBName",
+				"type": "SynapseNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebook": {
+						"referenceName": "NBName_acm_test",
+						"type": "NotebookReference"
+					},
+					"snapshot": true
+				}
+			},
+			{
+				"name": "Script_error",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "NBName",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"parameters": [
+								{
+									"name": "ids",
+									"type": "String",
+									"value": {
+										"value": "@activity('NBName').output.Status.Output.result.runId",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "startdatetimes",
+									"type": "String",
+									"value": {
+										"value": "@replace(substring(activity('NBName').output.Status.Output.status.schedulerInfo.submittedAt,0,19),'T',' ')",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "Pipelinenames",
+									"type": "String",
+									"value": {
+										"value": "@substring(string(activity('NBName').output.Status.Output.status.name),0,int(string(sub(int(string(indexOf(activity('NBName').output.Status.Output.status.name\n, activity('NBName').output.Status.Output.status.sparkPoolName))),1))))",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "enddatetimes",
+									"type": "String",
+									"value": {
+										"value": "@replace(substring(activity('NBName').output.Status.Output.result.lastCheckedOn,0,19),'T',' ')",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "error",
+									"type": "String",
+									"value": {
+										"value": "@activity('NBName').output.Status.Output.result.error.evalue",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "status",
+									"type": "String",
+									"value": {
+										"value": "@activity('NBName').output.Status.Output.result.runStatus",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								}
+							],
+							"type": "Query",
+							"text": "insert into audit_test values(@ids,@startdatetimes,@enddatetimes,@Pipelinenames,@error,@status)\n\n"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Script_success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "NBName",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"parameters": [
+								{
+									"name": "ids",
+									"type": "String",
+									"value": {
+										"value": "@activity('NBName').output.Status.Output.result.runId",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "startdatetimes",
+									"type": "String",
+									"value": {
+										"value": "@replace(substring(activity('NBName').output.Status.Output.status.schedulerInfo.submittedAt,0,19),'T',' ')",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "Pipelinenames",
+									"type": "String",
+									"value": {
+										"value": "@substring(string(activity('NBName').output.Status.Output.status.name),0,int(string(sub(int(string(indexOf(activity('NBName').output.Status.Output.status.name\n, activity('NBName').output.Status.Output.status.sparkPoolName))),1))))",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "enddatetimes",
+									"type": "String",
+									"value": {
+										"value": "@replace(substring(activity('NBName').output.Status.Output.result.lastCheckedOn,0,19),'T',' ')",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								},
+								{
+									"name": "status",
+									"type": "String",
+									"value": {
+										"value": "@activity('NBName').output.Status.Output.result.runStatus",
+										"type": "Expression"
+									},
+									"direction": "Input"
+								}
+							],
+							"type": "Query",
+							"text": "insert into audit_test values(@ids,@startdatetimes,@enddatetimes,@Pipelinenames,'NULL',@status)\n\n"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2023-07-10T13:44:18Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

@@ -1,0 +1,765 @@
+{
+	"name": "nb_rkem_container_details_updated",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "35e233c2-8238-411c-97da-943d294a7f8d"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"%run dynamicRouting/setup/nb_environment_setup"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"maestro_linked_service = \"ls_maestro_prod_gen2\"\r\n",
+					"mit_linked_service=\"ls_mitcave_gen2\"\r\n",
+					"maestro_storage_account = \"dlsazewpdatalakecleansed\"\r\n",
+					"mit_storage_account = \"wdpmitcdtweuadlscave\""
+				],
+				"execution_count": 53
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('rkem',maestro_storage_account,maestro_linked_service,'rkem')\r\n",
+					"container_mount_point('gcss',maestro_storage_account,maestro_linked_service,'gcss')\r\n",
+					"container_mount_point('wdp-mit-cdt-weu-app-cave-container',mit_storage_account,mit_linked_service,'mit')"
+				],
+				"execution_count": 54
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobID=mssparkutils.env.getJobId()"
+				],
+				"execution_count": 55
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"audit_data =  spark.read.format(\"csv\").option(\"header\",\"true\").load('synfs:/'+jobID+'/mit/cleansed/audit/audit.csv/')"
+				],
+				"execution_count": 61
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"server = \"wdp-mit-cdt-weu-sql.database.windows.net\"\r\n",
+					"database = \"wdp-mit-metadata\"\r\n",
+					"username = \"mit_admin\"\r\n",
+					"from notebookutils import mssparkutils\r\n",
+					"# password = get_secret_value('wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"password = mssparkutils.credentials.getSecret('wdp-mit-cdt-weu-kv-01','wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"print(password)\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{server};database={database};user={username};password={password}\"\r\n",
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"dbo.audit_log\") \\\r\n",
+					"    .load()\r\n",
+					"display(audit_data)\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"rkem_audit_details = audit_data.filter(col(\"component_name\")==\"nb_rkem_container_details\")"
+				],
+				"execution_count": 15
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"last_run_date_time = rkem_audit_details.collect()[0]['execution_end_time']\r\n",
+					"last_run_date = str(last_run_date_time).split(\" \")[0]"
+				],
+				"execution_count": 19
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"min_partition_value = last_run_date #\"2018-01-01\"\r\n",
+					"max_partition_value = current_date #\"2023-06-10\"\r\n",
+					"min_partition_date = datetime.strptime(min_partition_value, '%Y-%m-%d')\r\n",
+					"max_partition_date = datetime.strptime(max_partition_value, '%Y-%m-%d')\r\n",
+					"# start_date = min_partition_date - relativedelta(months=6)\r\n",
+					"end_date = max_partition_date\r\n",
+					"start_date = start_date.strftime('%Y-%m-%d')\r\n",
+					"end_date = end_date.strftime('%Y-%m-%d')"
+				],
+				"execution_count": 20
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"move_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/rkem/move/')\\\r\n",
+					"                                                .filter((col(\"date_part\")>start_date) & (col(\"date_part\")<=end_date))\r\n",
+					"# for full load use col(\"date_part\")>=min_partition_value and for incrmental load use col(\"date_part\")>min_partition_value if reading from Audit JSON"
+				],
+				"execution_count": 21
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"booking_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/rkem/eqcm/')\\\r\n",
+					"                                        .filter((col(\"date_part\")>=start_date) & (col(\"date_part\")<=end_date))"
+				],
+				"execution_count": 22
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"location_data=spark.read.format(\"csv\").option(\"header\",\"true\").load('synfs:/'+jobID+'/mit/cleansed/references/location/location.csv')\r\n",
+					"#abfss://wdp-mit-cdt-weu-app-cave-container@wdpmitcdtweuadlscave.dfs.core.windows.net/cleansed/references/location/location.csv"
+				],
+				"execution_count": 23
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vessel_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/rkstves_part/')"
+				],
+				"execution_count": 24
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_location_data = location_data.select(  col(\"site_id\")\r\n",
+					"                                          ,location_data[\"site\"].alias(\"site_name\")\r\n",
+					"                                          ,col(\"site_type\")\r\n",
+					"                                          ,col(\"country\")\r\n",
+					"\r\n",
+					")"
+				],
+				"execution_count": 25
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_vessel_data = vessel_data.select(vessel_data[\"vessel\"].alias(\"vessel_data_vessel\")\r\n",
+					"                                     ,vessel_data[\"vesnam\"].alias(\"vessel_data_vessel_name\")\r\n",
+					"                                     ,vessel_data[\"opercode\"].alias(\"vessel_data_opercode\")\r\n",
+					"                                     )"
+				],
+				"execution_count": 26
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_booking_data = booking_data.select(\r\n",
+					"                                         booking_data[\"blno\"].alias(\"sel_booking_data_blno\")\r\n",
+					"                                        ,booking_data[\"eqpno\"].alias(\"sel_booking_data_eqpno\")\r\n",
+					"                                        ,booking_data[\"acttim\"].alias(\"sel_booking_data_acttim\")\r\n",
+					"                                        ).distinct()"
+				],
+				"execution_count": 27
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"move_data_CN_US = move_data.select( \r\n",
+					"                                    move_data[\"eqpno\"].alias(\"move_data_CN_US_eqpno\")\r\n",
+					"                                   ,move_data[\"acttim\"].alias(\"move_data_CN_US_acttim\")\r\n",
+					"                                   ).filter((col(\"loport\").startswith(\"CN\")) & (col(\"podloc\").startswith(\"US\")))\\\r\n",
+					"                                    .distinct()\r\n",
+					"                                    "
+				],
+				"execution_count": 28
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"booking_moves_CN_US = move_data_CN_US.join(sel_booking_data,(sel_booking_data.sel_booking_data_eqpno == move_data_CN_US.move_data_CN_US_eqpno)\r\n",
+					"                                                      & (sel_booking_data.sel_booking_data_acttim == move_data_CN_US.move_data_CN_US_acttim) \r\n",
+					"                                                     ,\"inner\")"
+				],
+				"execution_count": 29
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_booking_moves_CN_US=booking_moves_CN_US.select(booking_moves_CN_US[\"sel_booking_data_blno\"].alias(\"sel_booking_moves_CN_US_blno\")\r\n",
+					"                                                  ,booking_moves_CN_US[\"sel_booking_data_eqpno\"].alias(\"sel_booking_moves_CN_US_eqpno\")).distinct()"
+				],
+				"execution_count": 30
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"all_moves_CN_US = sel_booking_data.join(sel_booking_moves_CN_US,(sel_booking_moves_CN_US[\"sel_booking_moves_CN_US_blno\"]==sel_booking_data[\"sel_booking_data_blno\"])\\\r\n",
+					"                                                    &(sel_booking_moves_CN_US[\"sel_booking_moves_CN_US_eqpno\"]==sel_booking_data[\"sel_booking_data_eqpno\"])\r\n",
+					"                                    ,\"inner\")"
+				],
+				"execution_count": 31
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_all_moves_CN_US = all_moves_CN_US.select(all_moves_CN_US[\"sel_booking_data_blno\"].alias(\"sel_all_moves_CN_US_blno\")\r\n",
+					"                                                    ,all_moves_CN_US[\"sel_booking_data_eqpno\"].alias(\"sel_all_moves_CN_US_eqpno\")\r\n",
+					"                                                    ,all_moves_CN_US[\"sel_booking_data_acttim\"].alias(\"sel_all_moves_CN_US_acttim\")\r\n",
+					"                                            )"
+				],
+				"execution_count": 32
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"all_eqp_details = move_data.join(sel_all_moves_CN_US,(sel_all_moves_CN_US[\"sel_all_moves_CN_US_eqpno\"] == move_data[\"eqpno\"])\\\r\n",
+					"                                                    &(sel_all_moves_CN_US[\"sel_all_moves_CN_US_acttim\"] == move_data[\"acttim\"])\r\n",
+					"                                ,\"inner\"\r\n",
+					"                                )"
+				],
+				"execution_count": 33
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"all_eqp_details = all_eqp_details.withColumn('Container_Status',when(all_eqp_details.stempty == \"Y\",\"Empty\")\r\n",
+					"                                                         .when(all_eqp_details.stempty == \"N\",\"Full\")\r\n",
+					"                                                         .otherwise(all_eqp_details.stempty) )"
+				],
+				"execution_count": 34
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sel_eqp_details = all_eqp_details.select(  all_eqp_details[\"sel_all_moves_CN_US_blno\"].alias(\"Booking Number\")\r\n",
+					"                                            ,all_eqp_details[\"sel_all_moves_CN_US_eqpno\"].alias(\"Container Number\")\r\n",
+					"                                            ,all_eqp_details[\"Container_Status\"].alias(\"Container Status\")\r\n",
+					"                                            ,all_eqp_details[\"vessel\"]\r\n",
+					"                                            ,all_eqp_details[\"move\"].alias(\"Activity\")\r\n",
+					"                                            ,all_eqp_details[\"trpstloc\"].alias(\"Activity Type\")\r\n",
+					"                                            ,all_eqp_details[\"actdat\"].alias(\"Activity Date\")\r\n",
+					"                                            ,all_eqp_details[\"actloc\"].alias(\"Activity Location Code\")\r\n",
+					"                                            ,all_eqp_details[\"loport\"].alias (\"Load Port Code\")\r\n",
+					"                                            ,all_eqp_details[\"diport\"].alias (\"Discharge Port Code\")\r\n",
+					"                                            ,all_eqp_details[\"fidiport\"]\r\n",
+					"                                            ,all_eqp_details[\"podloc\"]\r\n",
+					"                                            ,all_eqp_details[\"porloc\"]\r\n",
+					"                                        ).distinct()"
+				],
+				"execution_count": 35
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"location_data_fidiport = sel_location_data.alias(\"location_data_fidiport\")\r\n",
+					"location_data_podloc = sel_location_data.alias(\"location_data_podloc\")\r\n",
+					"location_data_lpc = sel_location_data.alias(\"location_data_lpc\")\r\n",
+					"location_data_dpc = sel_location_data.alias(\"location_data_dpc\")\r\n",
+					"location_data_alc = sel_location_data.alias(\"location_data_alc\")"
+				],
+				"execution_count": 36
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"location_data_fidiport = location_data_fidiport.select(  col(\"site_id\").alias(\"fidiport_site_id\")\r\n",
+					"                                          ,col(\"site_name\").alias(\"fidiport_site_name\")\r\n",
+					"                                          ,col(\"site_type\").alias(\"fidiport_site_type\")\r\n",
+					"                                          ,col(\"country\").alias(\"fidiport_country\")\r\n",
+					"                                          )\r\n",
+					"\r\n",
+					"\r\n",
+					"location_data_podloc = location_data_podloc.select(  col(\"site_id\").alias(\"podloc_site_id\")\r\n",
+					"                                          ,col(\"site_name\").alias(\"podloc_site_name\")\r\n",
+					"                                          ,col(\"site_type\").alias(\"podloc_site_type\")\r\n",
+					"                                          ,col(\"country\").alias(\"podloc_country\")\r\n",
+					"                                          )\r\n",
+					"\r\n",
+					"location_data_lpc = location_data_lpc.select(  col(\"site_id\").alias(\"lpc_site_id\")\r\n",
+					"                                          ,col(\"site_name\").alias(\"lpc_site_name\")\r\n",
+					"                                          ,col(\"site_type\").alias(\"lpc_site_type\")\r\n",
+					"                                          ,col(\"country\").alias(\"lpc_country\")\r\n",
+					"                                          )\r\n",
+					"\r\n",
+					"location_data_dpc = location_data_dpc.select(  col(\"site_id\").alias(\"dpc_site_id\")\r\n",
+					"                                          ,col(\"site_name\").alias(\"dpc_site_name\")\r\n",
+					"                                          ,col(\"site_type\").alias(\"dpc_site_type\")\r\n",
+					"                                          ,col(\"country\").alias(\"dpc_country\")\r\n",
+					"                                          )\r\n",
+					"location_data_alc = location_data_alc.select(  col(\"site_id\").alias(\"alc_site_id\")\r\n",
+					"                                          ,col(\"site_name\").alias(\"alc_site_name\")\r\n",
+					"                                          ,col(\"site_type\").alias(\"alc_site_type\")\r\n",
+					"                                          ,col(\"country\").alias(\"alc_country\")\r\n",
+					"                                          )\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 37
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"final_result_set = sel_eqp_details.join(sel_vessel_data,sel_vessel_data[\"vessel_data_vessel\"]==sel_eqp_details[\"vessel\"],\"left\")\\\r\n",
+					"                                  .join(location_data_fidiport,location_data_fidiport[\"fidiport_site_id\"]==sel_eqp_details[\"fidiport\"],\"left\")\\\r\n",
+					"                                  .join(location_data_lpc,location_data_lpc[\"lpc_site_id\"]==sel_eqp_details[\"Load Port Code\"],\"left\")\\\r\n",
+					"                                  .join(location_data_dpc,location_data_dpc[\"dpc_site_id\"]==sel_eqp_details[\"Discharge Port Code\"],\"left\")\\\r\n",
+					"                                  .join(location_data_alc,location_data_alc[\"alc_site_id\"]==sel_eqp_details[\"Activity Location Code\"],\"left\")\\\r\n",
+					"                                  .join(location_data_podloc,location_data_podloc[\"podloc_site_id\"]==sel_eqp_details[\"podloc\"],\"left\")"
+				],
+				"execution_count": 38
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"sel_final_result_set = final_result_set.select(\r\n",
+					"                                                 trim(final_result_set[\"Booking Number\"]).alias(\"Booking_Number\")\r\n",
+					"                                                ,trim(final_result_set[\"Container Number\"]).alias(\"Container_Number\")\r\n",
+					"                                                ,trim(final_result_set[\"Container Status\"]).alias(\"Container_Status\")\r\n",
+					"                                                ,trim(final_result_set[\"vessel_data_vessel_name\"]).alias(\"Vessel_Name\")\r\n",
+					"                                                ,trim(final_result_set[\"vessel_data_opercode\"]).alias(\"Vessel_Operator\")\r\n",
+					"                                                ,trim(final_result_set[\"Activity\"]).alias(\"Activity\")\r\n",
+					"                                                ,trim(final_result_set[\"Activity Type\"]).alias(\"Activity_Type\")\r\n",
+					"                                                ,trim(final_result_set[\"Activity Date\"]).alias(\"Activity_Date\")\r\n",
+					"                                                ,trim(final_result_set[\"Activity Location Code\"]).alias(\"Activity_Location_Code\")\r\n",
+					"                                                ,trim(final_result_set[\"alc_site_name\"]).alias(\"Activity_Location\")\r\n",
+					"                                                ,trim(final_result_set[\"alc_country\"]).alias(\"Activity_Location_Country\")\r\n",
+					"                                                ,trim(final_result_set[\"alc_site_type\"]).alias(\"Activity_Location_Site_Type\")\r\n",
+					"                                                ,trim(final_result_set[\"Load Port Code\"]).alias(\"Load_Port_Code\")\r\n",
+					"                                                ,trim(final_result_set[\"lpc_site_name\"]).alias(\"Load_Port_Location\")\r\n",
+					"                                                ,trim(final_result_set[\"lpc_country\"]).alias(\"Load_Port_Country\")\r\n",
+					"                                                ,trim(final_result_set[\"lpc_site_type\"]).alias(\"Load_Port_Site_Type\")\r\n",
+					"                                                ,trim(final_result_set[\"Discharge Port Code\"]).alias(\"Discharge_Port_Code\")\r\n",
+					"                                                ,trim(final_result_set[\"dpc_site_name\"]).alias(\"Discharge_Port_Location\")\r\n",
+					"                                                ,trim(final_result_set[\"dpc_country\"]).alias(\"Discharge_Port_Country\")\r\n",
+					"                                                ,trim(final_result_set[\"dpc_site_type\"]).alias(\"Discharge_Port_Site_Type\")\r\n",
+					"                                                ,trim(final_result_set[\"podloc\"]).alias(\"Place_of_Delivery_Code\")\r\n",
+					"                                                ,trim(final_result_set[\"podloc_site_name\"]).alias(\"Place_of_Delivery_Port_Location\")\r\n",
+					"                                                ,trim(final_result_set[\"podloc_country\"]).alias(\"Place_of_Delivery_Port_Country\")\r\n",
+					"                                                ,trim(final_result_set[\"podloc_site_type\"]).alias(\"Place_of_Delivery_Port_Site_Type\")\r\n",
+					"                                               \r\n",
+					"                                              ).distinct()"
+				],
+				"execution_count": 39
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"ord_final_result_set= sel_final_result_set.orderBy(\"Booking Number\",\"Container Number\",\"Activity Date\")"
+				],
+				"execution_count": 40
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"current_date = datetime.now().strftime('%Y-%m-%d')"
+				],
+				"execution_count": 46
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"write_path = 'synfs:/' + jobID + '/mit/RKEM/' + current_date + '/'\r\n",
+					""
+				],
+				"execution_count": 47
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"ord_final_result_set.write.format(\"delta\").mode(\"append\").save(write_path)"
+				],
+				"execution_count": 48
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"ord_final_result_set.write.format(\"delta\").mode(\"append\").save(write_path)\r\n",
+					"# audit_data = audit_data.withColumn(\"date\", when(col(\"notebook_name\")==\"nb_rkem_container_details\", lit(crate_date)).otherwise(df[\"date\"]))"
+				]
+			}
+		]
+	}
+}

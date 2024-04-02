@@ -1,9 +1,9 @@
 {
-	"name": "Pipeline 1",
+	"name": "AuditPipeline_copy2",
 	"properties": {
 		"activities": [
 			{
-				"name": "test",
+				"name": "NBName",
 				"type": "SynapseNotebook",
 				"dependsOn": [],
 				"policy": {
@@ -16,7 +16,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"notebook": {
-						"referenceName": "test",
+						"referenceName": "NBName_acm_test",
 						"type": "NotebookReference"
 					},
 					"snapshot": true
@@ -27,7 +27,7 @@
 				"type": "Script",
 				"dependsOn": [
 					{
-						"activity": "test",
+						"activity": "NBName",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -53,7 +53,7 @@
 									"name": "ids",
 									"type": "String",
 									"value": {
-										"value": "@activity('test').output.Status.Output.result.runId",
+										"value": "@activity('NBName').output.Status.Output.result.runId",
 										"type": "Expression"
 									},
 									"direction": "Input"
@@ -62,7 +62,7 @@
 									"name": "startdatetimes",
 									"type": "String",
 									"value": {
-										"value": "@replace(substring(activity('test').output.Status.Output.status.schedulerInfo.submittedAt,0,19),'T',' ')",
+										"value": "@replace(substring(activity('NBName').output.Status.Output.status.schedulerInfo.submittedAt,0,19),'T',' ')",
 										"type": "Expression"
 									},
 									"direction": "Input"
@@ -71,7 +71,7 @@
 									"name": "Pipelinenames",
 									"type": "String",
 									"value": {
-										"value": "@substring(string(activity('test').output.Status.Output.status.name),0,int(string(sub(int(string(indexOf(activity('test').output.Status.Output.status.name\n, activity('test').output.Status.Output.status.sparkPoolName))),1))))",
+										"value": "@substring(string(activity('NBName').output.Status.Output.status.name),0,int(string(sub(int(string(indexOf(activity('NBName').output.Status.Output.status.name\n, activity('NBName').output.Status.Output.status.sparkPoolName))),1))))",
 										"type": "Expression"
 									},
 									"direction": "Input"
@@ -80,7 +80,7 @@
 									"name": "enddatetimes",
 									"type": "String",
 									"value": {
-										"value": "@replace(substring(activity('test').output.Status.Output.result.lastCheckedOn,0,19),'T',' ')",
+										"value": "@replace(substring(activity('NBName').output.Status.Output.result.lastCheckhedOn,0,19),'T',' ')",
 										"type": "Expression"
 									},
 									"direction": "Input"
@@ -89,23 +89,14 @@
 									"name": "status",
 									"type": "String",
 									"value": {
-										"value": "@if(equals(activity('test').output.Status.Output.result.exitValue,null),'succeded','failed')",
-										"type": "Expression"
-									},
-									"direction": "Input"
-								},
-								{
-									"name": "error",
-									"type": "String",
-									"value": {
-										"value": "@if(equals(activity('test').output.Status.Output.result.exitValue,null),null,activity('test').output.Status.Output.result.exitValue)",
+										"value": "@activity('NBName').output.Status.Output.result.runStatus",
 										"type": "Expression"
 									},
 									"direction": "Input"
 								}
 							],
 							"type": "Query",
-							"text": "insert into audit_test values(@ids,@startdatetimes,@enddatetimes,@Pipelinenames,@error,@status)\n\n"
+							"text": "insert into audit_test values(@ids,@startdatetimes,@enddatetimes,@Pipelinenames,'NULL',@status)\n\n"
 						}
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
@@ -113,7 +104,7 @@
 			}
 		],
 		"annotations": [],
-		"lastPublishTime": "2023-07-28T15:14:13Z"
+		"lastPublishTime": "2023-08-03T10:15:48Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

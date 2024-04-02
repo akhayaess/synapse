@@ -1,0 +1,327 @@
+{
+	"name": "test_datetime _incremental",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "cd3b51db-acc3-4290-b4ef-42e16fd6494d"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"hi\")"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"ls_path='synfs:/'+jobId+'/abc/'\r\n",
+					"print(ls_path)"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql.functions import col"
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"\r\n",
+					"# Define the JDBC connection properties\r\n",
+					"jdbc_hostname = 'server-rgda1.database.windows.net'\r\n",
+					"jdbc_port = '1433'\r\n",
+					"jdbc_database = 'azuresqldb_rgda1'\r\n",
+					"jdbc_username = 'rgda1'\r\n",
+					"jdbc_password = 'esspl@123'\r\n",
+					"\r\n",
+					"# Define the JDBC connection URL\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{jdbc_hostname}:{jdbc_port};database={jdbc_database}\"\r\n",
+					"\r\n",
+					"# Create a SparkSession\r\n",
+					"spark = SparkSession.builder \\\r\n",
+					"    .appName(\"Read from Azure SQL\") \\\r\n",
+					"    .getOrCreate()\r\n",
+					"\r\n",
+					"# Read data from Azure SQL table\r\n",
+					"test_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"YourTableName\") \\\r\n",
+					"    .option(\"user\", jdbc_username) \\\r\n",
+					"    .option(\"password\", jdbc_password) \\\r\n",
+					"    .load()\r\n",
+					"\r\n",
+					"# Show the dataframe\r\n",
+					"# display(test_data)\r\n",
+					""
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"audit_test\") \\\r\n",
+					"    .option(\"user\", jdbc_username) \\\r\n",
+					"    .option(\"password\", jdbc_password) \\\r\n",
+					"    .load()"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"notebookName=\"test_datetime _incremental\"\r\n",
+					"startDate=audit_data.filter(audit_data.component_name == notebookName) \\\r\n",
+					"                                  .selectExpr(\"max(execution_end_time)\").first()[0]\r\n",
+					"print(startDate)"
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"endDate = \"2023-07-10 23:30:33\""
+				],
+				"execution_count": 16
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"test_data_filter= test_data.filter((\r\n",
+					"    col(\"DateTime\") > startDate) & (col(\"DateTime\") < endDate))\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 19
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"test_date= test_data_filter.collect()[0]['DateTime']\r\n",
+					"print(test_date)\r\n",
+					""
+				],
+				"execution_count": 20
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"test_data_filter.write.format(\"parquet\")\\\r\n",
+					"    .mode(\"append\")\\\r\n",
+					"    .option(\"header\", \"false\") \\\r\n",
+					"    .save(ls_path+'/incremental_test/date_part='+str(endDate).split(' ')[0])"
+				],
+				"execution_count": 22
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"mssparkutils.notebook.exit(endDate)"
+				]
+			}
+		]
+	}
+}

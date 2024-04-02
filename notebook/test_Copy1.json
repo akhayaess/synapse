@@ -1,0 +1,310 @@
+{
+	"name": "test_Copy1",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "279eb19c-9928-4870-b8a0-13825dbab3c9"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1",
+				"state": {
+					"5b77e1a3-5e63-4ec5-b5f2-4353fb7166d3": {
+						"type": "Synapse.DataFrame",
+						"sync_state": {
+							"table": {
+								"rows": [
+									{
+										"0": "4cde96cf-b165-4eea-91f9-141f03e88fe4",
+										"1": "2023-06-06 16:15:55.315475",
+										"2": "2023-06-06 16:15:56.198323",
+										"3": "1",
+										"4": "1",
+										"5": "Success",
+										"6": "no error"
+									}
+								],
+								"schema": [
+									{
+										"key": "0",
+										"name": "ID",
+										"type": "string"
+									},
+									{
+										"key": "1",
+										"name": "start_time",
+										"type": "timestamp"
+									},
+									{
+										"key": "2",
+										"name": "end_time",
+										"type": "timestamp"
+									},
+									{
+										"key": "3",
+										"name": "number_of_folder",
+										"type": "int"
+									},
+									{
+										"key": "4",
+										"name": "number_of_files",
+										"type": "int"
+									},
+									{
+										"key": "5",
+										"name": "file_transfer_result",
+										"type": "string"
+									},
+									{
+										"key": "6",
+										"name": "error description",
+										"type": "string"
+									}
+								],
+								"truncated": false
+							},
+							"isSummary": false,
+							"language": "scala"
+						},
+						"persist_state": {
+							"view": {
+								"type": "details",
+								"chartOptions": {
+									"chartType": "bar",
+									"aggregationType": "sum",
+									"categoryFieldKeys": [
+										"0"
+									],
+									"seriesFieldKeys": [
+										"3"
+									],
+									"isStacked": false
+								}
+							}
+						}
+					}
+				}
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"hi\")"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql.types import StructType, StructField, StringType, TimestampType, IntegerType\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"schema = StructType([\r\n",
+					"    StructField(\"ID\", StringType(), nullable=False),\r\n",
+					"    StructField(\"start_time\", TimestampType(), nullable=False),\r\n",
+					"    StructField(\"end_time\", TimestampType(), nullable=False),\r\n",
+					"    StructField(\"number_of_folder\", IntegerType(), nullable=False),\r\n",
+					"    StructField(\"number_of_files\", IntegerType(), nullable=False),\r\n",
+					"    StructField(\"file_transfer_result\", StringType(), nullable=False),\r\n",
+					"    StructField(\"error description\", StringType(), nullable=False)\r\n",
+					"])\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from datetime import datetime\r\n",
+					"\r\n",
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"ls_path='synfs:/'+jobId+'/abc/'\r\n",
+					"df = spark.read.json('synfs:/'+jobId+'/abc/JSON DUMP')\r\n",
+					"df=df.select(df[\"end_time\"])\r\n",
+					"df=df.orderBy(\"end_time\")\r\n",
+					"latest_date_time=df.collect()[0][0]\r\n",
+					"latest_date_time = datetime.fromisoformat(latest_date_time[:-1])\r\n",
+					"print(latest_date_time)"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"import os\r\n",
+					"import uuid\r\n",
+					"from datetime import datetime\r\n",
+					"\r\n",
+					"guid = str(uuid.uuid4())\r\n",
+					"start_date_time=datetime.now()\r\n",
+					"counter=0\r\n",
+					"subpaths=0\r\n",
+					"try:\r\n",
+					"    path = \"/\" + ls_path.replace(\":\", \"\")\r\n",
+					"    fpaths = [path + fd for fd in os.listdir(path)]\r\n",
+					"    # print(fpaths)\r\n",
+					"\r\n",
+					"    # Create a list of dictionaries with the file information\r\n",
+					"    data = []\r\n",
+					"    for fpath in fpaths:\r\n",
+					"        if '2023' in fpath.split(\"/\")[-1]:\r\n",
+					"            sub_path = [fpath +\"/\"+ fd for fd in os.listdir(fpath)]\r\n",
+					"            # print(sub_path)\r\n",
+					"            # print(\"_________________________________________\")\r\n",
+					"            for spath in sub_path:\r\n",
+					"                print(spath)\r\n",
+					"\r\n",
+					"                statinfo = os.stat(spath)\r\n",
+					"                current_date = datetime.today()\r\n",
+					"                modified_date = datetime.fromtimestamp(statinfo.st_mtime)\r\n",
+					"                if modified_date>latest_date_time:\r\n",
+					"                    # file_name = spath.split(\"/\")[-2]\r\n",
+					"                    # data.append({\" File Name\": file_name, \"Modification Date\": modified_date})\r\n",
+					"                    print(\"hi\")\r\n",
+					"    \r\n",
+					"                    subpaths = subpaths+len([j for j in os.listdir(fpath)])\r\n",
+					"                    print(subpaths)\r\n",
+					"                    df1=spark.read.load(ls_path+\"/\"+fpath.split(\"/\")[-1]+\"/\"+spath.split(\"/\")[-1])\r\n",
+					"                    counter =counter +1\r\n",
+					"                    print(df1.count())\r\n",
+					"                    #here we collect all df and combine then and then push to write\r\n",
+					"    end_date_time=datetime.now()\r\n",
+					"    new_row = [(guid, start_date_time, end_date_time,counter,subpaths, \"Success\",\"no error\")]\r\n",
+					"    audit_table = spark.createDataFrame(new_row, schema)\r\n",
+					"except Exception as e:\r\n",
+					"    print(e)\r\n",
+					"    end_date_time=datetime.now()\r\n",
+					"    new_row = [(guid, start_date_time, end_date_time,counter,subpaths, \"Failure\",e)]\r\n",
+					"    audit_table = spark.createDataFrame(new_row, schema)\r\n",
+					"print(subpaths)\r\n",
+					"\r\n",
+					"display(audit_table)\r\n",
+					"# audit_table.coalesce(1).write.format(\"json\")\\\r\n",
+					"#     .mode(\"append\")\\\r\n",
+					"#     .option(\"header\", \"false\") \\\r\n",
+					"#     .save('synfs:/'+jobId+'/xyz_mount/JSON DUMP')\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 44
+			}
+		]
+	}
+}

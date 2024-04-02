@@ -1,0 +1,245 @@
+{
+	"name": "Incremental_Load_original",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "2d95bdfb-31a9-4866-b77e-9ef1539e4656"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1",
+				"state": {
+					"d0fa76ca-d619-4cc2-8596-5888c01a32ab": {
+						"type": "Synapse.DataFrame",
+						"sync_state": {
+							"table": {
+								"rows": [
+									{
+										"0": "date-part = 2023-06-06",
+										"1": "2023-06-06 15:34:47"
+									}
+								],
+								"schema": [
+									{
+										"key": "0",
+										"name": " File Name",
+										"type": "string"
+									},
+									{
+										"key": "1",
+										"name": "Modification Date",
+										"type": "timestamp"
+									}
+								],
+								"truncated": false
+							},
+							"isSummary": false,
+							"language": "scala"
+						},
+						"persist_state": {
+							"view": {
+								"type": "details",
+								"chartOptions": {
+									"chartType": "bar",
+									"aggregationType": "count",
+									"categoryFieldKeys": [
+										"0"
+									],
+									"seriesFieldKeys": [
+										"0"
+									],
+									"isStacked": false
+								}
+							}
+						}
+					}
+				}
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"Notebook Session is started\")"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from notebookutils import mssparkutils\r\n",
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 38
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"ls_path='synfs:/'+jobId+'/abc/'\r\n",
+					"file_infos=mssparkutils.fs.ls(ls_path)\r\n",
+					"# print(file_infos)\r\n",
+					"print(ls_path)\r\n",
+					""
+				],
+				"execution_count": 39
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"from datetime import datetime\r\n",
+					"\r\n",
+					"df = spark.read.json('synfs:/'+jobId+'/xyz_mount/JSON DUMP')\r\n",
+					"df=df.select(df[\"end_time\"])\r\n",
+					"df=df.orderBy(\"end_time\")\r\n",
+					"latest_date_time=df.collect()[0][0]\r\n",
+					"latest_date_time = datetime.fromisoformat(latest_date_time[:-1])\r\n",
+					"print(latest_date_time)"
+				],
+				"execution_count": 40
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.functions import col\r\n",
+					"from datetime import datetime,date,timedelta\r\n",
+					"import os\r\n",
+					"# Create a SparkSession\r\n",
+					"spark = SparkSession.builder.getOrCreate()\r\n",
+					"\r\n",
+					"path = \"/\" + ls_path.replace(\":\", \"\")\r\n",
+					"fpaths = [path + fd for fd in os.listdir(path)]\r\n",
+					"# print(fpaths)\r\n",
+					"\r\n",
+					"# Create a list of dictionaries with the file information\r\n",
+					"data = []\r\n",
+					"for fpath in fpaths:\r\n",
+					"    if '2023' in fpath.split(\"/\")[-1]:\r\n",
+					"        sub_path = [fpath +\"/\"+ fd for fd in os.listdir(fpath)]\r\n",
+					"        # print(sub_path)\r\n",
+					"        # print(\"_________________________________________\")\r\n",
+					"        for spath in sub_path:\r\n",
+					"            print(spath)\r\n",
+					"\r\n",
+					"            statinfo = os.stat(spath)\r\n",
+					"            current_date = datetime.today()\r\n",
+					"            modified_date = datetime.fromtimestamp(statinfo.st_mtime)\r\n",
+					"            if modified_date>latest_date_time:\r\n",
+					"                file_name = spath.split(\"/\")[-2]\r\n",
+					"                data.append({\" File Name\": file_name, \"Modification Date\": modified_date})\r\n",
+					"\r\n",
+					"# Create a DataFrame from the list of dictionaries\r\n",
+					"df = spark.createDataFrame(data)\r\n",
+					"\r\n",
+					"# # Show the DataFrame\r\n",
+					"display(df)\r\n",
+					""
+				],
+				"execution_count": 43
+			}
+		]
+	}
+}

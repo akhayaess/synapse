@@ -1,0 +1,681 @@
+{
+	"name": "EMP_Streaming_dynamic",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "f5cd33d1-475f-4d12-886a-7833700485ae"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "9e8a54ae-11bb-4a55-901d-35781c65bda9",
+						"showTitle": true,
+						"title": "Defining the Required Packages/Modules to run the Framework"
+					}
+				},
+				"source": [
+					"\n",
+					"from pyspark.sql import SparkSession\n",
+					"from pyspark.sql.avro.functions import from_avro, to_avro\n",
+					"\n",
+					"from pyspark.sql.functions import *\n",
+					"from pyspark.sql.types import *\n",
+					"# from confluent_kafka.schema_registry import SchemaRegistryClient\n",
+					"import logging\n",
+					"import os, sys"
+				],
+				"execution_count": 39
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"confluentBootstrapServers = \"pkc-56d1g.eastus.azure.confluent.cloud:9092\"\r\n",
+					"confluentApiKey =  \"EPXQ3VGPM5PF7R5Q\"\r\n",
+					"confluentSecret = \"+XfH0xad7dJaYbuNgpkSO8PIq1IOsEnyCH7mPB9rJ3u7iWgvx0JLJ0OOZcJVWYiq\"\r\n",
+					"confluentTopicName = \"topic_0\""
+				],
+				"execution_count": 40
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"post_schema = (\r\n",
+					"  StructType()\r\n",
+					"    .add('_Id','long')\r\n",
+					"    .add('_ParentId','long')\r\n",
+					"    .add('_PostTypeId','long')\r\n",
+					"    .add('_Score','long')\r\n",
+					"    .add('_Tags','string')\r\n",
+					"    .add('_Title','string')\r\n",
+					"    .add('_ViewCount','long')  \r\n",
+					"    .add('_LastActivityDate','timestamp')\r\n",
+					"    .add('_LastEditDate','timestamp')\r\n",
+					"    .add('_LastEditorDisplayName','string')\r\n",
+					"    .add('_LastEditorUserId','long')\r\n",
+					"    .add('_OwnerDisplayName','string')\r\n",
+					"    .add('_OwnerUserId','long')\r\n",
+					"    .add('_AcceptedAnswerId','long')\r\n",
+					"    .add('_AnswerCount','long')\r\n",
+					"    .add('_Body','string')\r\n",
+					"    .add('_ClosedDate','timestamp')\r\n",
+					"    .add('_CommentCount','long')\r\n",
+					"    .add('_CommunityOwnedDate','timestamp')\r\n",
+					"    .add('_ContentLicense','string')\r\n",
+					"    .add('_CreationDate','timestamp')\r\n",
+					"    .add('_FavoriteCount','long')\r\n",
+					")"
+				],
+				"execution_count": 41
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "54a006f2-e83d-4256-b435-516aa759ca86",
+						"showTitle": true,
+						"title": "Initializing the Logger class"
+					}
+				},
+				"source": [
+					"post_raw_df = (\n",
+					"  spark\n",
+					"  .readStream\n",
+					"  .format(\"kafka\")\n",
+					"  .option(\"kafka.bootstrap.servers\", confluentBootstrapServers)\n",
+					"  .option(\"kafka.security.protocol\", \"SASL_SSL\")\n",
+					"  .option(\"kafka.sasl.jaas.config\", \"org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';\".format(confluentApiKey, confluentSecret))\n",
+					"  .option(\"kafka.sasl.mechanism\", \"PLAIN\")\n",
+					"  .option(\"subscribe\", confluentTopicName)\n",
+					"  .option(\"startingOffsets\", \"earliest\")\n",
+					"  .option(\"failOnDataLoss\", \"false\")\n",
+					"  .load()\n",
+					")"
+				],
+				"execution_count": 49
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 50
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 51
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"folder_path='synfs:/215/abc/kafka_df'\r\n",
+					"ckpt_path='synfs:/215/abc/checkpnt'\r\n",
+					""
+				],
+				"execution_count": 52
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"post_raw_df.printSchema()"
+				],
+				"execution_count": 53
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"post_raw_df.writeStream\\\r\n",
+					"      .format(\"console\")\\\r\n",
+					"      .start()\\\r\n",
+					"      .awaitTermination()"
+				],
+				"execution_count": 56
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"q = post_raw_df.writeStream.format(\"csv\").option(\"checkpointLocation\",ckpt_path) \\\r\n",
+					"    .trigger(processingTime='30 seconds').outputMode(\"append\") \\\r\n",
+					"    .start(folder_path)\r\n",
+					"\r\n",
+					"q.processAllAvailable()\r\n",
+					"q.stop()"
+				],
+				"execution_count": 47
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"query = post_raw_df.writeStream \\\r\n",
+					"    .outputMode(\"append\") \\\r\n",
+					"    .format(\"console\") \\\r\n",
+					"    .start()\r\n",
+					"\r\n",
+					"query.awaitTermination()"
+				],
+				"execution_count": 48
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "a35863a3-7acf-4e84-b649-ac13629dff29",
+						"showTitle": true,
+						"title": "Calling/Initiating the AppSecrets Class"
+					}
+				},
+				"source": [
+					"def getSecretValue(dbkey):\n",
+					"  try:\n",
+					"    logger.info(\"Currently Checking & Fecthing the secret for the key: \",dbkey)\n",
+					"    db_params = dbutils.secrets.get(scope = \"rkem_secret\", key = dbkey)\n",
+					"    return db_params\n",
+					"  except Exception as err:\n",
+					"    logger.error(\"Error Occured at getSecretValue function: \" + str(err))\n",
+					"    raise Exception(\"Error Occured at getSecretValue function: \" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "1ea41e20-1407-407d-aef0-18b21b6f10c7",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"kafkaBrokers = getSecretValue(\"kafkaBrokers\")\n",
+					"topics = dbutils.widgets.get(\"kafkaTopic\")\n",
+					"partitions = 2\n",
+					"kafkaKey = getSecretValue(\"kafkaKey\")\n",
+					"kafkaSecret = getSecretValue(\"kafkaSecret\")\n",
+					"startingOffset = dbutils.widgets.get(\"startingOffset\")\n",
+					"maxOffsets = getSecretValue(\"maxOffsets\")\n",
+					"checkpointLocation = getSecretValue(\"inputCheckPoint\")\n",
+					"writerCheckpointLocation = getSecretValue(\"writerCheckPoint\")+\"/\"+topics.split('.')[2]\n",
+					"kafkaGroup = getSecretValue(\"kafkaGroup\")\n",
+					"registryKey = getSecretValue(\"registryKey\")\n",
+					"registrySecret = getSecretValue(\"registrySecret\")\n",
+					"schemaRegistry_URL = getSecretValue(\"registryURL\")\n",
+					"consumerType = getSecretValue(\"consumerType\")\n",
+					"parsedRawOutput = getSecretValue(\"parsedRawOutput\")\n",
+					"parser= \"avro\"\n",
+					"flattenType = getSecretValue(\"flattenType\")\n",
+					"saveModeType = getSecretValue(\"saveModeType\")\n",
+					"batchInterval = getSecretValue(\"batchInterval\")\n",
+					"mergeSchema = \"true\"\n",
+					"outputWriterFormat = \"delta\"\n",
+					"compression = \"snappy\""
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "59b5436c-7ea8-4f0e-8721-590ec949d241",
+						"showTitle": true,
+						"title": "Creating SparkSession & Logging"
+					}
+				},
+				"source": [
+					"try:\n",
+					"  sparkSession = SparkSession.builder.appName(\"RKEM_Consumer_EMP\").enableHiveSupport().getOrCreate()\n",
+					"except Exception as err:\n",
+					"  logger.error(\"Error Occured at while creating SparkSession function:  \" + str(err))\n",
+					"  raise Exception(\"Error Occured at while creating SparkSession function: \" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "79d9355f-94e1-48ba-b2e3-e51702a7463e",
+						"showTitle": true,
+						"title": "Get Latest Schema by ID from Schema Registry"
+					}
+				},
+				"source": [
+					"##Connecting to schema registry and fetching latest schema from in it. This schema is matching with records we are consuming.\n",
+					"def getLatestAvroSchema(schema_id):\n",
+					"  try:\n",
+					"    schema_reg_conf = {'url': schemaRegistry_URL,'basic.auth.user.info':'{}:{}'.format(registryKey,registrySecret)}\n",
+					"    schema_reg_client = SchemaRegistryClient(schema_reg_conf)\n",
+					"    logger.info(\"Fecthing the Latest Schema for each Schema ID.{0} --> {1}\".format(schema_id, str(schema_reg_client.get_schema(schema_id).schema_str)))\n",
+					"    return str(schema_reg_client.get_schema(schema_id).schema_str)\n",
+					"  except Exception as err:\n",
+					"    logger.error(\"Error Occured at while fetching getLatestAvroSchema function: \" + str(err))\n",
+					"    raise Exception(\"Error Occured at while fetching getLatestAvroSchema function: \" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "a0d1f814-9b78-49af-a66a-c3e1d94f4372",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"## Check the SSL connection enabled or not || connect to Kafka and fetch the data || Repartition the data using maxOffsets\n",
+					"try:\n",
+					"  if (consumerType == \"cloud\"):\n",
+					"    logger.info(\"Successfully connected as a Cloud Consumer....!\")\n",
+					"    streamingRawData = (sparkSession.readStream.format(\"kafka\")\n",
+					"    .option(\"kafka.bootstrap.servers\", kafkaBrokers)\n",
+					"    .option(\"kafka.sasl.jaas.config\", \"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';\".format(kafkaKey,kafkaSecret))\n",
+					"    .option(\"kafka.security.protocol\", \"SASL_SSL\")\n",
+					"    .option(\"kafka.sasl.mechanism\", \"PLAIN\")\n",
+					"    .option(\"startingOffsets\", startingOffset) ##earliest or latest\n",
+					"    .option(\"fetchOffset.numRetries\", \"10\")\n",
+					"    .option(\"maxOffsetsPerTrigger\", maxOffsets)\n",
+					"    .option(\"failOnDataLoss\", \"false\")\n",
+					"    .option(\"checkpointLocation\", checkpointLocation)\n",
+					"    .option(\"kafka.group.id\", kafkaGroup)\n",
+					"    .option(\"subscribe\",topics)\n",
+					"    .load())\n",
+					"  else:\n",
+					"    logger.info(\"Successfully connected as a onPrem Consumer....!\")\n",
+					"    streamingRawData = (sparkSession.readStream.format(\"kafka\")\n",
+					"    .option(\"kafka.bootstrap.servers\", kafkaBrokers)\n",
+					"    .option(\"kafka.sasl.jaas.config\", \"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';\".format(kafkaKey,kafkaSecret))\n",
+					"    .option(\"kafka.security.protocol\", \"SASL_SSL\")\n",
+					"    .option(\"kafka.sasl.mechanism\", \"PLAIN\")\n",
+					"    .option(\"startingOffsets\", startingOffset)\n",
+					"    .option(\"fetchOffset.numRetries\", \"10\")\n",
+					"    .option(\"maxOffsetsPerTrigger\", maxOffsets)\n",
+					"    .option(\"failOnDataLoss\", \"false\")\n",
+					"    .option(\"checkpointLocation\", checkpointLocation)\n",
+					"    .option(\"kafka.group.id\", kafkaGroup)\n",
+					"    .option(\"subscribe\",topics)\n",
+					"    .load())\n",
+					"  \n",
+					"  if int(maxOffsets) in range(0, 50001): newPartitionsSize=4\n",
+					"  elif int(maxOffsets) in range(50001, 100001): newPartitionsSize=8\n",
+					"  elif int(maxOffsets) in range(100001, 300001): newPartitionsSize=16\n",
+					"  elif int(maxOffsets) in range(300001, 1000001): newPartitionsSize=48\n",
+					"  else: raise Exception(\"maxOffsets set to more than framework can handle: {}\" + maxOffsets)\n",
+					"  logger.info(\"Total No.of Partitones have been Recalculated based on maxOffsets.Latest Partition number is: \", newPartitionsSize)\n",
+					"\n",
+					"\n",
+					"except Exception as err:\n",
+					"  logger.error(\"Error Occured at while establishing the connection with Kafka Cluster: \" + str(err))\n",
+					"  raise Exception(\"Error Occured at while establishing the connection with Kafka Cluster: \" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "432591c1-92d6-411e-b5a8-9638ad59098b",
+						"showTitle": true,
+						"title": "Selecting the required columns and casting"
+					}
+				},
+				"source": [
+					"from pyspark.sql.functions import udf, StringType, col\n",
+					"try:\n",
+					"  binary_to_string = udf(lambda x: str(int.from_bytes(x, byteorder='big')), StringType())\n",
+					"  ##Parsing Data based on serialization type. Eg like Avro or Json\n",
+					"  if (parser == \"avro\"):\n",
+					"    logger.info(\"We have avro serialized data available in Kafka topics and Same has been Consumed!!!\")\n",
+					"    streamingfilteredData = streamingRawData.repartition(newPartitionsSize).selectExpr(\"topic\", \"CAST(key AS STRING)\", \"value\", \"partition\", \"offset\", \"timestamp\", \"timestampType\")\n",
+					"    rawData = streamingfilteredData.withColumn('fixedValue', expr(\"substring(value, 6, length(value)-5)\")).withColumn('valueSchemaId', binary_to_string(expr(\"substring(value, 2, 4)\")))\\\n",
+					"    .select(\"topic\",\"key\", \"fixedValue\", \"valueSchemaId\", col(\"partition\").alias(\"kpartition\"),col(\"offset\").alias(\"koffset\"), col(\"timestamp\").alias(\"ktimestamp\"), col(\"timestampType\").alias(\"ktimestampType\"))\n",
+					"    \n",
+					"  else:\n",
+					"    logger.info(\"We have non serialized avro data available in Kafka topics and Same has been Consumed!!!\")\n",
+					"    streamingfilteredData = streamingRawData.repartition(newPartitionsSize).selectExpr(\"topic\", \"CAST(key AS STRING)\", \"CAST(value AS STRING)\", \"partition\", \"offset\", \"timestamp\", \"timestampType\")\n",
+					"    rawData = streamingfilteredData.repartition(newPartitionsSize).select(\"topic\", \"key\", \"value\", col(\"partition\").alias(\"kpartition\"),col(\"offset\").alias(\"koffset\"),\\\n",
+					"                                                                          col(\"timestamp\").alias(\"ktimestamp\"), col(\"timestampType\").alias(\"ktimestampType\"))\n",
+					"  \n",
+					"  rawData.createOrReplaceTempView((\"streamingView\"))\n",
+					"  logger.info(\"Successfully Created the Streaming View: \", (\"streamingView\"))\n",
+					"except Exception as err:\n",
+					"  logger.error(\"Error Occured at while identifying the dataframe format : \" + str(err))\n",
+					"  raise Exception(\"Error Occured at while identifying the dataframe format : \" + str(err))\n",
+					"\n",
+					"#display(rawData)"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "9772fbf6-1e90-46c7-965f-c91ad229aa5d",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"#display(rawData)"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "83f912fc-36b7-4cbe-aa80-26be02792bba",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"#schema=getLatestAvroSchema(\"100356\")"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "2ef9ac7d-b171-4219-9d6e-90a20184565e",
+						"showTitle": true,
+						"title": "Json parse to parse the very nested data into Dataframe of columns"
+					}
+				},
+				"source": [
+					"from pyspark.sql.types import *\n",
+					"\n",
+					"def flattenNestedData(nestedDF):\n",
+					"  try:\n",
+					"     if (flattenType == \"full\"):\n",
+					"       ##Fetching Complex Datatype Columns from Schema\n",
+					"       fieldNames = dict([(field.name, field.dataType) for field in nestedDF.schema.fields if type(field.dataType) == ArrayType or type(field.dataType) == StructType]) \n",
+					"       while len(fieldNames)!=0:\n",
+					"         fieldName=list(fieldNames.keys())[0]\n",
+					"         print (\"Processing :\"+fieldName+\" Type : \"+str(type(fieldNames[fieldName])))\n",
+					"         if type(fieldNames[fieldName]) == StructType:\n",
+					"           extractedFields = [col(fieldName +'.'+ innerColName).alias(fieldName+\"_\"+innerColName) for innerColName in [ colName.name for colName in fieldNames[fieldName]]]\n",
+					"           nestedDF=nestedDF.select(\"*\", *extractedFields).drop(fieldName)\n",
+					"    \n",
+					"         elif type(fieldNames[fieldName]) == ArrayType: ##If we enable the ArrayType in Line 2 & 15, we end up having multiple duplicate records. Each array column value will create new record, which is worst.\n",
+					"           nestedDF=nestedDF.withColumn(fieldName,explode_outer(fieldName))\n",
+					"    \n",
+					"         fieldNames = dict([(field.name, field.dataType) for field in nestedDF.schema.fields if type(field.dataType) == ArrayType or type(field.dataType) == StructType]) ##Add if you want to explode ArrayType --> type(field.dataType) == ArrayType or  \n",
+					"         logger.info(\"Flatten Type Selected as FULL, Hence processing the Data with Flatten!!!!\")\n",
+					"       return nestedDF\n",
+					"    \n",
+					"     elif (flattenType == \"raw\"):\n",
+					"       logger.info(\"Flatten Type Selected as RAW, Hence processing the Data without Flatten!!!!\")\n",
+					"       return nestedDF\n",
+					"      \n",
+					"     else:\n",
+					"       logger.info(\"Flatten Type Selected as None or Not Select Anything, Hence Quiting the Process!!!!\")\n",
+					"       raise Exception(\"Flatten Type Selected as None or Not Select Anything, Hence Quiting the Process!!!!\")\n",
+					"      \n",
+					"  except Exception as err:\n",
+					"    logger.error(\"Error Occured at while flattening the dataframe : \" + str(err))\n",
+					"    raise Exception(\"Error Occured at while flattening the dataframe : \" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "27b8da46-95f4-47db-b911-f2930932e0df",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"#data = rawData.select(from_avro(\"fixedValue\", schema, {\"mode\":\"PERMISSIVE\"}).alias(\"parsedValue\"))\n",
+					"#display(data)"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "05515479-9634-42df-b918-481ee744bb7e",
+						"showTitle": true,
+						"title": "Deserialising the AVRO Data, calling Flatten Logic and storing it into ADLS"
+					}
+				},
+				"source": [
+					"##Connecting to schema registry and fetching latest schema from in it. This schema is matching with records we are consuming.\n",
+					"def dataFrameWriter(finalData, ephoch_id):\n",
+					"  try :\n",
+					"    #print(\"finalData\")\n",
+					"    #print(finalData)\n",
+					"    if(parser == \"avro\"):\n",
+					"      cachedDf = finalData.cache()\n",
+					"      distinctValueSchemaIdDF = cachedDf.select(col('valueSchemaId').cast('integer'), col('topic'),col('kpartition').cast('String')).distinct()\n",
+					"      #print(\"**** distinctValueSchemaIdDF *** = \")\n",
+					"      for valueRow in distinctValueSchemaIdDF.collect():\n",
+					"        currentValueSchemaId = sparkSession.sparkContext.broadcast(valueRow.valueSchemaId)\n",
+					"        currentValueTopic = sparkSession.sparkContext.broadcast(valueRow.topic)\n",
+					"        currentValueTopicval = currentValueTopic.value\n",
+					"        kpartition = sparkSession.sparkContext.broadcast(valueRow.kpartition)\n",
+					"        kpartitionval=kpartition.value\n",
+					"        print(\"kpartitionval = \",kpartitionval)\n",
+					"        currentValueSchema = sparkSession.sparkContext.broadcast(getLatestAvroSchema(currentValueSchemaId.value))\n",
+					"        filterValueDF = cachedDf.filter(col('valueSchemaId') == currentValueSchemaId.value)\n",
+					"        finalDF = filterValueDF.select(\"topic\", \"key\", from_avro(\"fixedValue\", currentValueSchema.value, {\"mode\":\"PERMISSIVE\"}).alias(\"parsedValue\"),  \"kpartition\",\"koffset\",\"ktimestamp\",\"ktimestampType\")\n",
+					"        print(\"-----final data\")\n",
+					"        #print('final', finalDF)\n",
+					"        flattenDF = flattenNestedData(finalDF) \n",
+					"        print(\"***********\")\n",
+					"        #print(flattenDF)\n",
+					"        logger.info(\"Writing the Data into final target location: \"+ (parsedRawOutput) + \" With FileFormat as:\" + \"delta\")\n",
+					"        flattenDF.withColumn(\"date_part\",to_date(col(\"ktimestamp\"),\"YYYY-MM-dd\")).withColumn(\"m_loadtimestamp\", current_timestamp()).write.format(outputWriterFormat).option(\"compression\", compression)\\\n",
+					"        .mode(saveModeType).option(\"mergeSchema\",mergeSchema).partitionBy(\"date_part\").save(parsedRawOutput+\"/\"+currentValueTopicval.split('.')[2])\n",
+					"        #print(flattenDF)\n",
+					"    elif (parser == \"json\"):\n",
+					"      flattenDF = flattenNestedData(finalData)    \n",
+					"      \n",
+					"      logger.info(\"Writeing the Data into final target location: \"+ (parsedRawOutput) + \" With FileFormat as:\" + \"delta\")\n",
+					"      flattenDF.withColumn(\"date_part\",current_date()).withColumn(\"m_loadtimestamp\", current_timestamp()).write.format(outputWriterFormat).option(\"compression\", compression)\\\n",
+					"        .mode(saveModeType).option(\"mergeSchema\",mergeSchema).partitionBy(\"date_part\").save(parsedRawOutput+\"/\"+currentValueTopicval.split('.')[2])\n",
+					"    else:   \n",
+					"      logger.info(\"Please Select a Valid Parser Type. Currently we are supporting Avro and Json Types!!!\")\n",
+					"      raise Exception(\"Please Select a Valid Parser Type. Currently we are supporting Avro and Json Types!!!\")\n",
+					"          \n",
+					"  except Exception as err:\n",
+					"    logger.error(\"Error Occured at while writting the dataframe to ADLS: \" + str(err))\n",
+					"    raise Exception(\"Error Occured at while writting the dataframe to ADLS:\" + str(err))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "5bfb6994-3528-4b68-828f-34f41e4cd14d",
+						"showTitle": false,
+						"title": ""
+					}
+				},
+				"source": [
+					"#data = rawData.select(from_avro(\"fixedValue\", schema, {\"mode\":\"PERMISSIVE\"}).alias(\"parsedValue\"))"
+				],
+				"execution_count": 0
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"application/vnd.databricks.v1+cell": {
+						"nuid": "905aeb88-d16b-4005-9fe9-e1523b9005cd",
+						"showTitle": true,
+						"title": "Initiating the Streaming Query for starting the Ingestion & Processing Framework"
+					}
+				},
+				"source": [
+					"\n",
+					"##Initiating the Streaming query\n",
+					"try:\n",
+					"  logger.info(\"Initiating the Streaming query...!!!!\")\n",
+					"  finalStreamingQuery = (rawData.writeStream\n",
+					"                       .option(\"checkpointLocation\", writerCheckpointLocation)\n",
+					"                       .foreachBatch(dataFrameWriter)\n",
+					"                       .queryName(\"Emp_queryName\")\n",
+					"                       .trigger(once=True)\n",
+					"                       .start())\n",
+					"\n",
+					"  finalStreamingQuery.awaitTermination()\n",
+					"  \n",
+					"except Exception as err:\n",
+					"  logger.error(\"Error Occured at while performing the finalStreamingQuery: \" + str(err))\n",
+					"  raise Exception(\"Error Occured at while performing the finalStreamingQuery: \" + str(err))"
+				],
+				"execution_count": 0
+			}
+		]
+	}
+}

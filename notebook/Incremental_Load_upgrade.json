@@ -1,0 +1,363 @@
+{
+	"name": "Incremental_Load_upgrade",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "3e1a9c35-4aa4-4bc2-b090-fe249b135221"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1",
+				"state": {
+					"480b03bf-2b4e-45dd-8878-d9a138c9989a": {
+						"type": "Synapse.DataFrame",
+						"sync_state": {
+							"table": {
+								"rows": [
+									{
+										"0": "2",
+										"1": "2023-05-16",
+										"2": "2",
+										"3": " 2023-05-14"
+									},
+									{
+										"0": "2",
+										"1": "2023-05-16",
+										"2": "2",
+										"3": " 2023-05-14"
+									},
+									{
+										"0": "2",
+										"1": "2023-05-18",
+										"2": "2",
+										"3": " 2023-05-14"
+									},
+									{
+										"0": "2",
+										"1": "2023-05-18",
+										"2": "2",
+										"3": " 2023-05-14"
+									},
+									{
+										"0": "7",
+										"1": "2023-05-18",
+										"2": "7",
+										"3": " 2023-05-19"
+									},
+									{
+										"0": "7",
+										"1": "2023-05-21",
+										"2": "7",
+										"3": " 2023-05-19"
+									},
+									{
+										"0": "7",
+										"1": "2023-05-21",
+										"2": "7",
+										"3": " 2023-05-19"
+									},
+									{
+										"0": "3",
+										"1": "2023-05-16",
+										"2": "3",
+										"3": " 2023-05-15"
+									},
+									{
+										"0": "3",
+										"1": "2023-05-17",
+										"2": "3",
+										"3": " 2023-05-15"
+									},
+									{
+										"0": "3",
+										"1": "2023-05-22",
+										"2": "3",
+										"3": " 2023-05-15"
+									},
+									{
+										"0": "3",
+										"1": "2023-05-22",
+										"2": "3",
+										"3": " 2023-05-15"
+									},
+									{
+										"0": "5",
+										"1": "2023-05-21",
+										"2": "5",
+										"3": " 2023-05-17"
+									},
+									{
+										"0": "1",
+										"1": "2023-05-18",
+										"2": "1",
+										"3": " 2023-05-13"
+									},
+									{
+										"0": "1",
+										"1": "2023-05-21",
+										"2": "1",
+										"3": " 2023-05-13"
+									},
+									{
+										"0": "8",
+										"1": "2023-05-17",
+										"2": "8",
+										"3": " 2023-05-20"
+									},
+									{
+										"0": "8",
+										"1": "2023-05-17",
+										"2": "8",
+										"3": " 2023-05-20"
+									},
+									{
+										"0": "8",
+										"1": "2023-05-18",
+										"2": "8",
+										"3": " 2023-05-20"
+									},
+									{
+										"0": "8",
+										"1": "2023-05-21",
+										"2": "8",
+										"3": " 2023-05-20"
+									},
+									{
+										"0": "8",
+										"1": "2023-05-22",
+										"2": "8",
+										"3": " 2023-05-20"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-16",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-17",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-19",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-21",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-22",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "9",
+										"1": "2023-05-22",
+										"2": "9",
+										"3": " 2023-05-21"
+									},
+									{
+										"0": "4",
+										"1": "2023-05-18",
+										"2": "4",
+										"3": " 2023-05-16"
+									}
+								],
+								"schema": [
+									{
+										"key": "0",
+										"name": "Product_ID",
+										"type": "int"
+									},
+									{
+										"key": "1",
+										"name": "Date",
+										"type": "date"
+									},
+									{
+										"key": "2",
+										"name": "Price",
+										"type": "string"
+									},
+									{
+										"key": "3",
+										"name": "date-part ",
+										"type": "string"
+									}
+								],
+								"truncated": false
+							},
+							"isSummary": false,
+							"language": "scala"
+						},
+						"persist_state": {
+							"view": {
+								"type": "details",
+								"chartOptions": {
+									"chartType": "bar",
+									"aggregationType": "sum",
+									"categoryFieldKeys": [
+										"1"
+									],
+									"seriesFieldKeys": [
+										"0"
+									],
+									"isStacked": false
+								}
+							}
+						}
+					}
+				}
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"Notebook Session is started\")"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from notebookutils import mssparkutils\r\n",
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"ls_path='synfs:/'+jobId+'/abc/rkem/move/transaction'\r\n",
+					"file_infos=mssparkutils.fs.ls(ls_path)\r\n",
+					"# print(file_infos)\r\n",
+					"df = spark.read.parquet(ls_path+\"/\")\r\n",
+					"df= df.filter(col(\"Product_ID\")== col(\"Price\"))\r\n",
+					"display(df)\r\n",
+					"\r\n",
+					"# data =spark.read.format(\"delta\").load(ls_path+\"/\")\r\n",
+					"# data= data.filter(col(\"arr_datetime_dttm\")<= col(\"date_part\"))\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 50
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"from datetime import datetime\r\n",
+					"\r\n",
+					"# df = spark.read.json('synfs:/'+jobId+'/abc/JSON DUMP')\r\n",
+					"# df=df.select(df[\"end_time\"])\r\n",
+					"# df=df.orderBy(\"end_time\")\r\n",
+					"latest_date_time=\"2023-05-15\"\r\n",
+					"latest_date_time = datetime.fromisoformat(latest_date_time)\r\n",
+					"print(latest_date_time)"
+				],
+				"execution_count": 9
+			}
+		]
+	}
+}

@@ -1,5 +1,5 @@
 {
-	"name": "Notebook 1",
+	"name": "print_Hi",
 	"properties": {
 		"nbformat": 4,
 		"nbformat_minor": 2,
@@ -18,7 +18,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "a9b219bb-93b1-43e5-b340-eb8a5d8bc147"
+				"spark.autotune.trackingId": "434bab41-0a3b-4327-b50a-64c0a6df0d75"
 			}
 		},
 		"metadata": {
@@ -52,30 +52,9 @@
 			{
 				"cell_type": "code",
 				"source": [
-					"from pyspark.sql import SparkSession\r\n",
-					"from pyspark.sql.types import StructType, StructField, StringType, IntegerType\r\n",
-					"\r\n",
-					"# Create a Spark session\r\n",
-					"spark = SparkSession.builder.appName(\"example\").getOrCreate()\r\n",
-					"\r\n",
-					"# Define the schema of the DataFrame\r\n",
-					"schema = StructType([\r\n",
-					"    StructField(\"id\", IntegerType(), True),\r\n",
-					"    StructField(\"name\", StringType(), True),\r\n",
-					"    StructField(\"age\", IntegerType(), True)\r\n",
-					"])\r\n",
-					"\r\n",
-					"# Define the data\r\n",
-					"data = [(1, \"Alice\", 25), (2, \"Bob\", 30), (3, \"Charlie\", 22)]\r\n",
-					"\r\n",
-					"# Create a DataFrame\r\n",
-					"df = spark.createDataFrame(data, schema=schema)\r\n",
-					"\r\n",
-					"# Show the DataFrame\r\n",
-					"df.show()\r\n",
-					""
+					"print(\"hi\")"
 				],
-				"execution_count": 12
+				"execution_count": 3
 			},
 			{
 				"cell_type": "code",
@@ -91,10 +70,14 @@
 					}
 				},
 				"source": [
-					"%run Mounted_Notebook\r\n",
-					""
+					"from notebookutils import mssparkutils\r\n",
+					"mssparkutils.fs.mount(\r\n",
+					"    'abfss://sales@hotandcoldstorage.dfs.core.windows.net',\r\n",
+					"    '/sales',\r\n",
+					"    {'accountKey':'5S+k7VLHax9TSLyoLXAAKhRM8uP226DH+z8KIEK7wy+kdREspez7os15QUIruOgNSav0+OM+BOhy+ASt4K1hrA=='}\r\n",
+					")"
 				],
-				"execution_count": 10
+				"execution_count": 4
 			},
 			{
 				"cell_type": "code",
@@ -110,7 +93,12 @@
 					}
 				},
 				"source": [
-					"container_mount_point('xyzzzz','Azb','hotandcoldstorage','abc')"
+					"from notebookutils import mssparkutils\r\n",
+					"mssparkutils.fs.mount(\r\n",
+					"    'abfss://sales@hotandcoldstorage.dfs.core.windows.net',\r\n",
+					"    '/sales1',\r\n",
+					"    {'linkedService':'Azb'}\r\n",
+					")"
 				],
 				"execution_count": 5
 			},
@@ -128,28 +116,19 @@
 					}
 				},
 				"source": [
-					"folder_path='synfs:/1/abc/can_create_automatically/here/delta'\r\n",
+					"from pyspark.sql import SparkSession\r\n",
+					"jobId=mssparkutils.env.getJobId()\r\n",
+					"print(jobId)\r\n",
+					"spark = SparkSession.builder \\\r\n",
+					"                        .appName(\"ReadParquet\") \\\r\n",
+					"                        .getOrCreate()\r\n",
+					"df=spark.read.load('synfs:/'+jobId+'/sales/*2025*/*.parquet')\r\n",
+					"# df.show()\r\n",
+					"df.count()\r\n",
+					"# df.write.format(\"parquet\").save(\"synfs:/\"+jobId+\"/sales/qqq1\")\r\n",
 					""
 				],
 				"execution_count": 6
-			},
-			{
-				"cell_type": "code",
-				"metadata": {
-					"jupyter": {
-						"source_hidden": false,
-						"outputs_hidden": false
-					},
-					"nteract": {
-						"transient": {
-							"deleting": false
-						}
-					}
-				},
-				"source": [
-					"df.write.format(\"delta\").mode(\"overwrite\").save(folder_path)"
-				],
-				"execution_count": 7
 			}
 		]
 	}

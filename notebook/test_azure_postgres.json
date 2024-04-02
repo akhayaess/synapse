@@ -1,0 +1,732 @@
+{
+	"name": "test_azure_postgres",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "5744186a-63f2-4c70-b2ab-32ce2b2b3138"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"!pip install faker"
+				],
+				"execution_count": 222
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"import pandas as pd\r\n",
+					"import random\r\n",
+					"from datetime import datetime, timedelta\r\n",
+					"from faker import Faker\r\n",
+					"import urllib\r\n",
+					"from sqlalchemy import create_engine\r\n",
+					"import uuid\r\n",
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.types import *\r\n",
+					"fake = Faker()\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 223
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"leaves=2\r\n",
+					"num_employees = 500\r\n",
+					"days_per_employee = 150\r\n",
+					"StarEmployeepercentage=10\r\n",
+					"leave_taken_month=int(days_per_employee/30)*leaves\r\n",
+					"\r\n",
+					"trendValue=int((num_employees/100)*(days_per_employee/60))\r\n",
+					"if trendValue==0:trendValue=1\r\n",
+					"params = urllib.parse.quote_plus('Driver={SQL Server};Server=ESSPLLAP12\\SQL2019;database=AttendanceSystem;UID=sa;PWD=sa123@123')\r\n",
+					"engine = create_engine(\"mssql+pyodbc:///?odbc_connect=%s\" % params)\r\n",
+					"LoadType=\"FULL\""
+				],
+				"execution_count": 224
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"print(uuid.uuid4())"
+				],
+				"execution_count": 225
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"holiday_dates = [\r\n",
+					"    \"2023-01-26\",\r\n",
+					"    \"2023-03-08\",\r\n",
+					"    \"2023-03-30\",\r\n",
+					"    \"2023-04-04\",\r\n",
+					"    \"2023-04-07\",\r\n",
+					"    \"2023-04-22\",\r\n",
+					"    \"2023-05-05\"\r\n",
+					"]\r\n",
+					"holiday_dates = [pd.to_datetime(date).date() for date in holiday_dates]"
+				],
+				"execution_count": 226
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def generate_id(num_employees, days_per_employee):\r\n",
+					"    return [i + 1 for i in range(num_employees) for _ in range(days_per_employee)]\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"def generate_employee_names(num_employees, days_per_employee):\r\n",
+					"    unique_names = set()\r\n",
+					"    while len(unique_names) < num_employees:\r\n",
+					"        name = fake.name()\r\n",
+					"        unique_names.add(name)\r\n",
+					"    name=list(unique_names)\r\n",
+					"    return [i for i in name for _ in range(days_per_employee)]\r\n",
+					"\r\n",
+					"def generate_entry_datetimes(num_employees, days_per_employee):\r\n",
+					"    start_date = datetime(2023, 1, 26)\r\n",
+					"    entry_datetimes = []\r\n",
+					"    entry_date = []\r\n",
+					"    tempListRest=[]\r\n",
+					"\r\n",
+					"    for _ in range(int(num_employees*0.5)):\r\n",
+					"        tempListRest.append(1)\r\n",
+					"        for day in range(days_per_employee):\r\n",
+					"\r\n",
+					"            entry_time = start_date + timedelta(\r\n",
+					"            days=day, hours=random.randint(9, 11), minutes=random.randint(0, 30),seconds=random.randint(0, 59))\r\n",
+					"            entry_datetimes.append(entry_time)\r\n",
+					"            entry_date.append(entry_time.date())\r\n",
+					"    for _ in range(int(num_employees*0.3)):\r\n",
+					"        tempListRest.append(1)\r\n",
+					"        for day in range(days_per_employee):\r\n",
+					"\r\n",
+					"            entry_time = start_date + timedelta(\r\n",
+					"            days=day, hours=14, minutes=random.randint(0,59 ),seconds=random.randint(0, 59))\r\n",
+					"            entry_datetimes.append(entry_time)\r\n",
+					"            entry_date.append(entry_time.date())\r\n",
+					"    for _ in range(int(num_employees*0.1)):\r\n",
+					"        tempListRest.append(1)\r\n",
+					"        for day in range(days_per_employee):\r\n",
+					"\r\n",
+					"            entry_time = start_date + timedelta(\r\n",
+					"            days=day, hours=6, minutes=random.randint(0,59 ),seconds=random.randint(0, 59))\r\n",
+					"            entry_datetimes.append(entry_time)\r\n",
+					"            entry_date.append(entry_time.date())\r\n",
+					"    for _ in range(num_employees-len(tempListRest)):\r\n",
+					"        for day in range(days_per_employee):\r\n",
+					"\r\n",
+					"            entry_time = start_date + timedelta(\r\n",
+					"            days=day, hours=21, minutes=random.randint(0,59 ),seconds=random.randint(0, 59))\r\n",
+					"            entry_datetimes.append(entry_time)\r\n",
+					"            entry_date.append(entry_time.date())\r\n",
+					"\r\n",
+					"    return entry_datetimes, entry_date\r\n",
+					"\r\n",
+					"def generate_exit_datetimes_and_durations(entry_datetimes, num_employees):\r\n",
+					"    exit_datetimes = []\r\n",
+					"    durations = []\r\n",
+					"\r\n",
+					"    for entry_time in entry_datetimes:\r\n",
+					"        rand_val = random.randint(1, 100*trendValue)\r\n",
+					"\r\n",
+					"        if rand_val <= 3*trendValue:  # 0-1 hours (2%)\r\n",
+					"            exit_time = entry_time + timedelta(hours=random.uniform(0, 1), minutes=random.randint(0, 59))\r\n",
+					"        elif rand_val <= 8*trendValue:  # 1-3 hours (5%)\r\n",
+					"            exit_time = entry_time + timedelta(hours=random.uniform(1, 3), minutes=random.randint(0, 59))\r\n",
+					"        elif rand_val <= 15*trendValue:  # 3.5-6 hours (7%)\r\n",
+					"            exit_time = entry_time + timedelta(hours=random.uniform(3.5, 6), minutes=random.randint(0, 59))\r\n",
+					"        else:  # 6-8 hours (86%)\r\n",
+					"            exit_time = entry_time + timedelta(hours=random.uniform(6, 8), minutes=random.randint(0, 59))\r\n",
+					"        \r\n",
+					"        durations.append(exit_time - entry_time)\r\n",
+					"        exit_datetimes.append(exit_time)\r\n",
+					"\r\n",
+					"    return exit_datetimes, durations\r\n",
+					"\r\n",
+					"def extract_duration_components(durations):\r\n",
+					"    hhmmss = [str(int(duration.total_seconds() // 3600))+\":\"+str(int((duration.total_seconds() % 3600) // 60))+\":\"+str(int(duration.total_seconds() % 60)) for duration in durations]\r\n",
+					"    return hhmmss\r\n",
+					"\r\n",
+					"def is_holiday(date):\r\n",
+					"    return date in holiday_dates\r\n",
+					"\r\n",
+					"\r\n",
+					"def categorize_weekend_or_weekday(date):\r\n",
+					"    if date.weekday() in [5] or date in holiday_dates:\r\n",
+					"        return 'Sat/Holiday'\r\n",
+					"    elif date.weekday() in [6]:\r\n",
+					"        return 'Sun'\r\n",
+					"    else:\r\n",
+					"        return 'Weekday'\r\n",
+					"\r\n",
+					"def update_audit(load_type, start_time, end_time, error_description=None):\r\n",
+					"    global audit_df\r\n",
+					"    unique_id = 1\r\n",
+					"    audit_data = {\r\n",
+					"    'ID': [unique_id],\r\n",
+					"    'Load Type': [load_type],\r\n",
+					"    'Start Datetime': [start_time],\r\n",
+					"    'End Datetime': [end_time],\r\n",
+					"    'Error Description': [error_description]\r\n",
+					"    }\r\n",
+					"    audit_df = pd.DataFrame(audit_data)\r\n",
+					"    audit_df = spark.createDataFrame(audit_df)\r\n",
+					"    audit_df.write \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .mode(\"append\") \\\r\n",
+					"    .option(\"url\", \"jdbc:postgresql://rgda1-postgres.postgres.database.azure.com:5432/attendance_system_\") \\\r\n",
+					"    .option(\"dbtable\", \"audit_table\") \\\r\n",
+					"    .option(\"user\", \"prgda1\") \\\r\n",
+					"    .option(\"password\", \"esspl@123\") \\\r\n",
+					"    .option(\"driver\", \"org.postgresql.Driver\") \\\r\n",
+					"    .save()\r\n",
+					"    \r\n",
+					"    \r\n",
+					"\r\n",
+					"\r\n",
+					"def Full_N_Incremental(loads):\r\n",
+					"    start_time = datetime.now()\r\n",
+					"    try:\r\n",
+					"        if loads==\"FULL\":\r\n",
+					"            unique_employee_ids = df['Employee ID'].unique()\r\n",
+					"            unique_employee_names = df['Employee Name'].unique()\r\n",
+					"\r\n",
+					"            # Create a new DataFrame for unique values\r\n",
+					"            unique_data = {\r\n",
+					"                'Employee ID': unique_employee_ids,\r\n",
+					"                'Employee Name': unique_employee_names\r\n",
+					"            }\r\n",
+					"\r\n",
+					"            unique_df = pd.DataFrame(unique_data)\r\n",
+					"            unique_df['Submitted By'] = \"ESSPL ADMIN\"\r\n",
+					"            unique_df['Created On'] = datetime.now()\r\n",
+					"            unique_df['Updated On'] = datetime.now()\r\n",
+					"\r\n",
+					"            table_name = 'EmployeeMaster'\r\n",
+					"            \r\n",
+					"            unique_df = spark.createDataFrame(unique_df)\r\n",
+					"            unique_df.write \\\r\n",
+					"                    .format(\"jdbc\") \\\r\n",
+					"                    .mode(\"append\") \\\r\n",
+					"                    .option(\"url\", \"jdbc:postgresql://rgda1-postgres.postgres.database.azure.com:5432/attendance_system_\") \\\r\n",
+					"                    .option(\"dbtable\", table_name) \\\r\n",
+					"                    .option(\"user\", \"prgda1\") \\\r\n",
+					"                    .option(\"password\", \"esspl@123\") \\\r\n",
+					"                    .option(\"driver\", \"org.postgresql.Driver\") \\\r\n",
+					"                    .save()\r\n",
+					"            \r\n",
+					"            end_time = datetime.now()\r\n",
+					"            update_audit('FULL', start_time, end_time, 'Full load completed.')\r\n",
+					"\r\n",
+					"        elif loads==\"INCREMENTAL\":\r\n",
+					"            sql_query = 'SELECT * FROM [AttendanceSystem].[dbo].[EmployeeMaster]'\r\n",
+					"            sql_df = pd.read_sql(sql_query, engine)\r\n",
+					"            result_df = df.merge(sql_df, on='Employee ID', how='left', suffixes=('_x', '_y'))\r\n",
+					"            filtered_df = result_df[result_df['Employee Name_y'].isna()]\r\n",
+					"            unique_employee_ids = filtered_df['Employee ID'].unique()\r\n",
+					"            unique_employee_names = filtered_df['Employee Name_x'].unique()\r\n",
+					"            filtered_df['Created On'] = pd.to_datetime(filtered_df['Created On'])\r\n",
+					"            unique_data = {\r\n",
+					"                        'Employee ID': unique_employee_ids,\r\n",
+					"                        'Employee Name': unique_employee_names\r\n",
+					"                    }\r\n",
+					"\r\n",
+					"\r\n",
+					"            unique_df = pd.DataFrame(unique_data)\r\n",
+					"            unique_df['Submitted By'] = \"ESSPL ADMIN\"\r\n",
+					"            \r\n",
+					"\r\n",
+					"            unique_df['Created On'] =  datetime.now()\r\n",
+					"            unique_df['Updated On'] = datetime.now()\r\n",
+					"            table_name = 'EmployeeMaster'\r\n",
+					"            unique_df = spark.createDataFrame(unique_df)\r\n",
+					"            unique_df.write \\\r\n",
+					"                    .format(\"jdbc\") \\\r\n",
+					"                    .mode(\"append\") \\\r\n",
+					"                    .option(\"url\", \"jdbc:postgresql://rgda1-postgres.postgres.database.azure.com:5432/attendance_system_\") \\\r\n",
+					"                    .option(\"dbtable\", table_name) \\\r\n",
+					"                    .option(\"user\", \"prgda1\") \\\r\n",
+					"                    .option(\"password\", \"esspl@123\") \\\r\n",
+					"                    .option(\"driver\", \"org.postgresql.Driver\") \\\r\n",
+					"                    .save()\r\n",
+					"            end_time = datetime.now()\r\n",
+					"            update_audit('INCREMENTAL', start_time, end_time, 'Incremental load completed.')\r\n",
+					"    except Exception as e:\r\n",
+					"        # Handle errors and log error description in the audit DataFrame\r\n",
+					"        end_time = datetime.now()\r\n",
+					"        error_description = str(e)\r\n",
+					"        update_audit(loads, start_time, end_time, error_description)\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 227
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def create_dataframe(num_employees, days_per_employee):\r\n",
+					"    ids = generate_id(num_employees, days_per_employee)\r\n",
+					"    employee_names = generate_employee_names(num_employees, days_per_employee)\r\n",
+					"    entry_datetimes,entry_date = generate_entry_datetimes(num_employees, days_per_employee)\r\n",
+					"    exit_datetimes, durations = generate_exit_datetimes_and_durations(entry_datetimes,num_employees)\r\n",
+					"\r\n",
+					"    duration = extract_duration_components(durations)\r\n",
+					"\r\n",
+					"    data = {\r\n",
+					"        \"Employee ID\": ids,\r\n",
+					"        \"WorkDate\":entry_date,\r\n",
+					"        \"Employee Name\": employee_names,\r\n",
+					"        \"Entry datetime\": entry_datetimes,\r\n",
+					"        \"Exit datetime\": exit_datetimes,\r\n",
+					"        \"duration\": duration\r\n",
+					"    }\r\n",
+					"\r\n",
+					"    return pd.DataFrame(data),durations\r\n",
+					"\r\n",
+					"df,durations1 = create_dataframe(num_employees, days_per_employee)\r\n",
+					"df['OffDay'] = df['WorkDate'].apply(categorize_weekend_or_weekday)\r\n",
+					"num_employees_to_select = int((num_employees*StarEmployeepercentage)/100)\r\n",
+					"print(num_employees_to_select)\r\n",
+					"random_employee_names = random.sample(list(set(df['Employee Name'].tolist())), num_employees_to_select)\r\n",
+					"df['Active'] = 0  \r\n",
+					"df.loc[(df['Employee Name'].isin(random_employee_names)) & (df['OffDay'].isin([\"Sat/Holiday\",\"Sun\"])), 'Active'] = 1\r\n",
+					"df['leave'] = 0\r\n",
+					"for employee in df['Employee Name'].unique():\r\n",
+					"    indices = df[(df['Employee Name'] == employee)].sample(leave_taken_month).index\r\n",
+					"    df.loc[indices, 'leave'] = 1\r\n",
+					"    \r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 314
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df.head(30)\r\n",
+					""
+				],
+				"execution_count": 315
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"leave_0_indices = df[df['leave'] == 1].sample(frac=0.3).index\r\n",
+					"df.loc[leave_0_indices, 'leave'] = 0\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"df.loc[(df['leave'] == 1), 'Exit datetime'] = \"L\"\r\n",
+					"df.loc[(df['leave'] == 1), 'Entry datetime'] = \"L\"\r\n",
+					"df.loc[((df['OffDay'] == \"Sat/Holiday\")&(df['Active'] == 0))&(df['leave'] == 0), 'Exit datetime'] = \"A\"\r\n",
+					"df.loc[((df['OffDay'] == \"Sat/Holiday\")&(df['Active'] == 0))&(df['leave'] == 0), 'Entry datetime'] = \"A\"\r\n",
+					"df.loc[(df['OffDay'] == \"Sun\") & (df['Active'] != 1), 'Exit datetime'] = \"WO-I\"\r\n",
+					"df.loc[(df['OffDay'] == \"Sun\") & (df['Active'] != 1), 'Entry datetime'] = \"WO-I\"\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 316
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df.head(30)"
+				],
+				"execution_count": 317
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"schema = df.dtypes\r\n",
+					"print(schema)"
+				],
+				"execution_count": 318
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Full_N_Incremental(LoadType)"
+				],
+				"execution_count": 182
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df = df.iloc[:, :5]\r\n",
+					"df['Submitted By'] = \"ESSPL ADMIN\"\r\n",
+					"df['Created On'] = datetime.now()\r\n",
+					"df['Updated On'] = datetime.now()\r\n",
+					"new_column_order = ['Employee ID','Employee Name', 'WorkDate', 'Entry datetime','Exit datetime',\r\n",
+					"       'Submitted By', 'Created On', 'Updated On']\r\n",
+					"df = df[new_column_order]\r\n",
+					"table_name_transaction = 'EmployeeTransaction'\r\n",
+					""
+				],
+				"execution_count": 319
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def equivalent_type(f):\r\n",
+					"    if f == 'datetime64[ns]': return TimestampType()\r\n",
+					"    elif f == 'int64': return LongType()\r\n",
+					"    elif f == 'int32': return IntegerType()\r\n",
+					"    elif f == 'float64': return DoubleType()\r\n",
+					"    elif f == 'float32': return FloatType()\r\n",
+					"    else: return StringType()\r\n",
+					"\r\n",
+					"def define_structure(string, format_type):\r\n",
+					"    try: typo = equivalent_type(format_type)\r\n",
+					"    except: typo = StringType()\r\n",
+					"    return StructField(string, typo)\r\n",
+					"\r\n",
+					"# Given pandas dataframe, it will return a spark's dataframe.\r\n",
+					"def pandas_to_spark(pandas_df):\r\n",
+					"    columns = list(pandas_df.columns)\r\n",
+					"    types = list(pandas_df.dtypes)\r\n",
+					"    struct_list = []\r\n",
+					"    for column, typo in zip(columns, types): \r\n",
+					"      struct_list.append(define_structure(column, typo))\r\n",
+					"    p_schema = StructType(struct_list)\r\n",
+					"    return sqlContext.createDataFrame(pandas_df, p_schema)\r\n",
+					""
+				],
+				"execution_count": 320
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df1=pandas_to_spark(df)"
+				],
+				"execution_count": 321
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df1.show()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df1.write \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .mode(\"append\") \\\r\n",
+					"    .option(\"url\", \"jdbc:postgresql://rgda1-postgres.postgres.database.azure.com:5432/attendance_system_\") \\\r\n",
+					"    .option(\"dbtable\", table_name_transaction) \\\r\n",
+					"    .option(\"user\", \"prgda1\") \\\r\n",
+					"    .option(\"password\", \"esspl@123\") \\\r\n",
+					"    .option(\"driver\", \"org.postgresql.Driver\") \\\r\n",
+					"    .save()"
+				],
+				"execution_count": 323
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.types import StringType\r\n",
+					"\r\n",
+					"# Create a Spark session\r\n",
+					"spark = SparkSession.builder.appName(\"PandasToSpark\").getOrCreate()\r\n",
+					"\r\n",
+					"# Sample data with a mix of datetime and text values\r\n",
+					"data = [\r\n",
+					"    \"2023-09-13 10:30:00.278906\"\r\n",
+					"    \r\n",
+					"]\r\n",
+					"\r\n",
+					"# Create a Pandas DataFrame with the mixed column\r\n",
+					"df = pd.DataFrame({\"MixedColumn\": data})\r\n",
+					"\r\n",
+					"# Define the schema for the PySpark DataFrame\r\n",
+					"from pyspark.sql.types import StructType, StructField\r\n",
+					"\r\n",
+					"schema = StructType([StructField(\"MixedColumn\", StringType())])\r\n",
+					"\r\n",
+					"# Convert Pandas DataFrame to PySpark DataFrame using the defined schema\r\n",
+					"spark_df = spark.createDataFrame(df, schema)\r\n",
+					"\r\n",
+					"# Show the PySpark DataFrame\r\n",
+					"spark_df.show()\r\n",
+					""
+				],
+				"execution_count": 300
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", \"jdbc:postgresql://rgda1-postgres.postgres.database.azure.com:5432/attendance_system_\") \\\r\n",
+					"    .option(\"dbtable\", \"ShiftMaster\") \\\r\n",
+					"    .option(\"user\", \"prgda1\") \\\r\n",
+					"    .option(\"password\", \"esspl@123\") \\\r\n",
+					"    .option(\"driver\", \"org.postgresql.Driver\") \\\r\n",
+					"    .load()\r\n",
+					"\r\n",
+					""
+				]
+			}
+		]
+	}
+}

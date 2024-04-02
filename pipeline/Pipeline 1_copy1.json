@@ -1,5 +1,5 @@
 {
-	"name": "Pipeline 1",
+	"name": "Pipeline 1_copy1",
 	"properties": {
 		"activities": [
 			{
@@ -16,7 +16,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"notebook": {
-						"referenceName": "test",
+						"referenceName": "print_Hi",
 						"type": "NotebookReference"
 					},
 					"snapshot": true
@@ -113,7 +113,7 @@
 			}
 		],
 		"annotations": [],
-		"lastPublishTime": "2023-07-28T15:14:13Z"
+		"lastPublishTime": "2023-08-03T10:31:22Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

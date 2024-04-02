@@ -1,0 +1,790 @@
+{
+	"name": "nb_gsis_vessel_schedule_details_updated",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "eed97f86-403d-4629-bc34-78f86bda06bd"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"%run dynamicRouting/setup/nb_environment_setup"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"maestro_linked_service = \"ls_maestro_prod_gen2\"\r\n",
+					"maestro_storage_account = \"dlsazewpdatalakecleansed\"\r\n",
+					"mit_linked_service=\"ls_mitcave_gen2\"\r\n",
+					"mit_storage_account = \"wdpmitcdtweuadlscave\""
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('gsis',maestro_storage_account,maestro_linked_service,'gsis')\r\n",
+					"container_mount_point('gcss',maestro_storage_account,maestro_linked_service,'gcss')\r\n",
+					"container_mount_point('wdp-mit-cdt-weu-app-cave-container',mit_storage_account,mit_linked_service,'mit')"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobID=mssparkutils.env.getJobId()"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"server = \"wdp-mit-cdt-weu-sql.database.windows.net\"\r\n",
+					"database = \"wdp-mit-metadata\"\r\n",
+					"username = \"mit_admin\"\r\n",
+					"password = mssparkutils.credentials.getSecret('wdp-mit-cdt-weu-kv-01','wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{server};database={database};user={username};password={password}\"\r\n",
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"dbo.audit_log\") \\\r\n",
+					"    .load()"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_audit_details = audit_data.filter((col(\"component_name\") == \"nb_gsis_vessel_schedule_details\")\\\r\n",
+					"                                            & (col(\"status\") == \"Success\")\r\n",
+					"                                       )"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# last_run_date_time = gsis_audit_details.collect()[0]['execution_end_time']\r\n",
+					"# last_run_date = str(last_run_date_time).split(\" \")[0]"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# min_partition_value = last_run_date\r\n",
+					"# max_partition_value = datetime.now()\r\n",
+					"min_partition_value = \"2018\"\r\n",
+					"max_partition_value = \"2023\"\r\n",
+					"min_partition_value =datetime.strptime(min_partition_value, \"%Y-%m-%d\").date()\r\n",
+					"# startDate=startDate+timedelta(days=13)\r\n",
+					"max_partition_value= datetime.strptime(max_partition_value, \"%Y-%m-%d\").date()\r\n",
+					""
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vessel_all_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/rkstves_part/')"
+				],
+				"execution_count": 11
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vessel_all_data.createOrReplaceTempView(\"vessel_all_v\")"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vessel_data = spark.sql('''\r\n",
+					"                            Select * from \r\n",
+					"                                (\r\n",
+					"                                    Select vessel,vesnam,opercode,callsign\r\n",
+					"                                    ,row_number() OVER( PARTITION BY vessel ORDER BY source_txn_commit DESC )as row_num from vessel_all_v \r\n",
+					"                                    \r\n",
+					")vsl \r\n",
+					"where vsl.row_num =1\r\n",
+					"\r\n",
+					"''')"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"vessel_data.createOrReplaceTempView(\"vessel_v\")"
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"terminal_data = spark.read.format(\"csv\").option(\"header\",\"true\").load('synfs:/'+jobID+'/mit/references/location/location.csv')"
+				],
+				"execution_count": 15
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"terminal_data.createOrReplaceTempView(\"terminal_v\")"
+				],
+				"execution_count": 17
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# gsis_all_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gsis/gsis_data_append/')"
+				],
+				"execution_count": 20
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql.types import IntegerType"
+				],
+				"execution_count": 24
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# gsis_all_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gsis/gsis_data_append/')\\\r\n",
+					"#                                           .filter(substring((col(\"arr_datetime_dttm\"),1,4).cast(IntegerType())>=min_partition_value)) #& (substring(col(\"arr_datetime_dttm\"),1,4)<=max_partition_value))\r\n",
+					"#                                         # .filter((col(\"date_part\")>=min_partition_value) & (col(\"date_part\")<=max_partition_value))\r\n",
+					"gsis_all_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gsis/gsis_data_append/') \\\r\n",
+					"    .filter((substring(col(\"arr_datetime_dttm\"), 1, 4).cast(IntegerType()) >= \"2018\")\\\r\n",
+					"                &   (substring(col(\"arr_datetime_dttm\"), 1, 4).cast(IntegerType()) <= \"2023\")\\\r\n",
+					"            )"
+				],
+				"execution_count": 25
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_all_data.createOrReplaceTempView(\"gsis_all_v\")"
+				],
+				"execution_count": 28
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_all_link_data = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gsis/gsis_data_append/')\\\r\n",
+					"                                                .filter(col(\"comnd\") != \"DELETE\")\\\r\n",
+					"                                                  .select(     \r\n",
+					"                                                             col(\"gsis_key_id\")\r\n",
+					"                                                            ,col(\"rkst_cd\")\r\n",
+					"                                                            ,col(\"date_submt_dttm\")\r\n",
+					"                                                            ,col(\"comnd\")\r\n",
+					"                                                    )\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 30
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_all_link_data.createOrReplaceTempView(\"gsis_all_link_v\")"
+				],
+				"execution_count": 32
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_sel_link_data= spark.sql('''\r\n",
+					"                                Select * from  (\r\n",
+					"                                                    SELECT row_number()over( PARTITION BY gsis_key_id ORDER BY date_submt_dttm desc) as row_num\r\n",
+					"                                                    ,*\r\n",
+					"                                                    from gsis_all_link_v \r\n",
+					"                                                )\r\n",
+					"                                where row_num =1 \r\n",
+					"\r\n",
+					"                                ''')"
+				],
+				"execution_count": 33
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_sel_link_data.createOrReplaceTempView(\"gsis_sel_link_v\")"
+				],
+				"execution_count": 36
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_sel_data = spark.sql('''\r\n",
+					"                            Select * from  (\r\n",
+					"                                                SELECT row_number()over( PARTITION BY gsis_key_id ORDER BY date_submt_dttm desc) as row_num\r\n",
+					"                                                ,gsis_key_id\r\n",
+					"                                                ,srvc_arr1_cd\r\n",
+					"                                                ,tm_mode_arr1_cd\r\n",
+					"                                                ,voy_arr1_cd\r\n",
+					"                                                ,voy_dep1_cd\r\n",
+					"                                                ,est_arr_datetime_dttm\r\n",
+					"                                                ,est_dep_datetime_dttm\r\n",
+					"                                                ,profrma_arr_ts_dttm\r\n",
+					"                                                ,profrma_dep_ts_dttm\r\n",
+					"                                                ,arr_datetime_dttm\r\n",
+					"                                                ,dep_datetime_dttm\r\n",
+					"                                                ,dir_arr2_cd\r\n",
+					"                                                ,omit_mark_ind\r\n",
+					"                                                ,tugs_arr\r\n",
+					"                                                ,note_txt\r\n",
+					"                                                ,arr_drft_frwd_val\r\n",
+					"                                                ,arr_drft_aftr_val\r\n",
+					"                                                ,dep_draft_fwd\r\n",
+					"                                                ,dep_drft_aftr_val\r\n",
+					"                                                ,tugs_dep\r\n",
+					"                                                ,site_order_val\r\n",
+					"                                                ,vsl_oper_cd\r\n",
+					"                                                ,line_cd\r\n",
+					"                                                ,prev_key_id\r\n",
+					"                                                ,next_key_id\r\n",
+					"                                                ,date_submt_dttm\r\n",
+					"                                                ,comnd\r\n",
+					"                                                ,vsl_cd\r\n",
+					"                                                ,rkst_cd\r\n",
+					"                                                from gsis_all_v\r\n",
+					"                                            )gsis\r\n",
+					"                                where gsis.row_num =1 and comnd <>'DELETE'\r\n",
+					"\r\n",
+					"''')"
+				],
+				"execution_count": 37
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_sel_data.createOrReplaceTempView(\"gsis_sel_v\")"
+				],
+				"execution_count": 39
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_link_data = spark.sql('''\r\n",
+					"                            Select gsis_key_id as gsis_link_key_id\r\n",
+					"                                  ,gsis.rkst_cd as gsis_link_rkst_cd\r\n",
+					"                                  ,trm.site_id as Terminal_link_site_id\r\n",
+					"                                  ,trm.city_id as Terminal_city_id\r\n",
+					"                                  ,trm.site as Terminal_link_site\r\n",
+					"                            From gsis_sel_link_v gsis\r\n",
+					"                            left join  terminal_v trm on trim(trm.site_id) = trim(gsis.rkst_cd)\r\n",
+					"    \r\n",
+					"\r\n",
+					"\r\n",
+					"''')"
+				],
+				"execution_count": 40
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_link_data.createOrReplaceTempView(\"gsis_link_v\")"
+				],
+				"execution_count": 43
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_vsl_trml_data= spark.sql('''\r\n",
+					"                                Select gsis.*\r\n",
+					"                                      ,vsl.*\r\n",
+					"                                      ,trm.*\r\n",
+					"                                      ,prev.gsis_link_key_id as prev_gsis_link_key_id\r\n",
+					"                                      ,prev.gsis_link_rkst_cd as prev_Terminal_link_site_id\r\n",
+					"                                      ,case when prev.Terminal_link_site_id is null \r\n",
+					"                                            then substring(prev.gsis_link_rkst_cd,1,length(prev.gsis_link_rkst_cd)-2)\r\n",
+					"                                            else prev.Terminal_city_id\r\n",
+					"                                            end as prev_Terminal_city_id\r\n",
+					"                                      ,next.gsis_link_key_id as next_gsis_link_key_id\r\n",
+					"                                      ,next.Terminal_link_site_id as next_Terminal_link_site_id\r\n",
+					"                                      ,case when next.Terminal_link_site_id is null \r\n",
+					"                                            then substring(next.gsis_link_rkst_cd,1,length(next.gsis_link_rkst_cd)-2)\r\n",
+					"                                            else next.Terminal_city_id\r\n",
+					"                                            end as next_Terminal_city_id\r\n",
+					"                                From  gsis_sel_v gsis\r\n",
+					"                                Left join vessel_v vsl on vsl.vessel = gsis.vsl_cd\r\n",
+					"                                inner join terminal_v trm on trim(trm.site_id) = trim(gsis.rkst_cd)\r\n",
+					"                                Left join gsis_link_v prev on prev.gsis_link_key_id  = gsis.prev_key_id\r\n",
+					"                                Left join gsis_link_v next on next.gsis_link_key_id = gsis.next_key_id\r\n",
+					"\r\n",
+					"                         ''')  \r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"                          "
+				],
+				"execution_count": 45
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_vsl_trml_data.createOrReplaceTempView(\"gsis_vsl_trml_v\")"
+				],
+				"execution_count": 47
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"gsis_vessel_details= spark.sql('''\r\n",
+					"                                    Select       gsis_key_id \r\n",
+					"                                                ,srvc_arr1_cd as ServiceCode\r\n",
+					"                                                ,vsl_cd  as VesselCode\r\n",
+					"                                                ,vesnam  as VesselName\r\n",
+					"                                                ,rkst_cd as TerminalCode\r\n",
+					"                                                ,site    as TerminalName\r\n",
+					"                                                ,city_id as PortCode\r\n",
+					"                                                ,city as PortName\r\n",
+					"                                                ,country as PortCountry\r\n",
+					"                                                ,tm_mode_arr1_cd as TModeDeparture\r\n",
+					"                                                ,voy_arr1_cd as ArrVoy\r\n",
+					"                                                ,voy_dep1_cd as DepVoy\r\n",
+					"                                                ,est_arr_datetime_dttm as ScheduleArrival\r\n",
+					"                                                ,est_dep_datetime_dttm as ScheduleDeparture\r\n",
+					"                                                ,profrma_arr_ts_dttm as ProformaArrival\r\n",
+					"                                                ,profrma_dep_ts_dttm as ProformaDeparture\r\n",
+					"                                                ,arr_datetime_dttm as ActualArrival\r\n",
+					"                                                ,dep_datetime_dttm as ActualDeparture\r\n",
+					"                                                ,dir_arr2_cd as DirectionDeparture\r\n",
+					"                                                ,omit_mark_ind as Omit\r\n",
+					"                                                ,tugs_arr as TugsArr\r\n",
+					"                                                ,note_txt as Note\r\n",
+					"                                                ,arr_drft_frwd_val as DraftForArrival\r\n",
+					"                                                ,arr_drft_aftr_val as DraftAftArrival\r\n",
+					"                                                ,dep_draft_fwd as DraftForDeparture\r\n",
+					"                                                ,dep_drft_aftr_val as DraftAftDeparture\r\n",
+					"                                                ,tugs_dep as TugsDep\r\n",
+					"                                                ,site_order_val as site_order_val\r\n",
+					"                                                ,vsl_oper_cd as OperatorCode\r\n",
+					"                                                ,callsign as CallSign\r\n",
+					"                                                ,line_cd as Line\r\n",
+					"                                                ,prev_Terminal_link_site_id as TerminalCodePrev\r\n",
+					"                                                ,prev_Terminal_city_id as PortCodePrev\r\n",
+					"                                                ,next_Terminal_link_site_id as TerminalCodeNext\r\n",
+					"                                                ,next_Terminal_city_id as PortCodeNext\r\n",
+					"                                                ,prev_key_id as prev_gsis_key_id\r\n",
+					"                                                ,next_key_id as next_gsis_key_id\r\n",
+					"                                                ,date_submt_dttm as date_submt\r\n",
+					"                                    from gsis_vsl_trml_v \r\n",
+					"                        ''')"
+				],
+				"execution_count": 49
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_vessel_details.createOrReplaceTempView(\"gsis_vessel_details_v\")"
+				],
+				"execution_count": 50
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"current_date = datetime.now().strftime('%Y%m%d')"
+				],
+				"execution_count": 51
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"write_path = 'synfs:/' + jobID + '/mit/GSIS/' + current_date + '/'"
+				],
+				"execution_count": 53
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gsis_vessel_details.write.format(\"parquet\").mode(\"overwrite\").save(write_path)"
+				],
+				"execution_count": 56
+			}
+		]
+	}
+}

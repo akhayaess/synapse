@@ -1,0 +1,389 @@
+{
+	"name": "test_json_mearsk",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "sparkpool1",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "ffe2d9ff-eace-4d25-b327-4a9789cb422e"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1",
+				"state": {
+					"202f50f8-2010-4c85-8a37-38eff733e8ed": {
+						"type": "Synapse.DataFrame",
+						"sync_state": {
+							"table": {
+								"rows": [
+									{
+										"0": "47c82884-e55e-4a18-a04c-12b3a13a1f1c",
+										"1": "2023-06-07T11:26:49.679Z",
+										"2": "no error",
+										"3": "Success",
+										"4": "0",
+										"5": "0",
+										"6": "2023-06-07T11:26:49.23Z"
+									}
+								],
+								"schema": [
+									{
+										"key": "0",
+										"name": "ID",
+										"type": "string"
+									},
+									{
+										"key": "1",
+										"name": "end_time",
+										"type": "string"
+									},
+									{
+										"key": "2",
+										"name": "error description",
+										"type": "string"
+									},
+									{
+										"key": "3",
+										"name": "file_transfer_result",
+										"type": "string"
+									},
+									{
+										"key": "4",
+										"name": "number_of_files",
+										"type": "bigint"
+									},
+									{
+										"key": "5",
+										"name": "number_of_folder",
+										"type": "bigint"
+									},
+									{
+										"key": "6",
+										"name": "start_time",
+										"type": "string"
+									}
+								],
+								"truncated": false
+							},
+							"isSummary": false,
+							"language": "scala"
+						},
+						"persist_state": {
+							"view": {
+								"type": "details",
+								"chartOptions": {
+									"chartType": "bar",
+									"aggregationType": "sum",
+									"categoryFieldKeys": [
+										"0"
+									],
+									"seriesFieldKeys": [
+										"4"
+									],
+									"isStacked": false
+								}
+							}
+						}
+					}
+				}
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/0328350c-f7d1-4ca4-8da5-485b8f684719/resourceGroups/RG_DA_1/providers/Microsoft.Synapse/workspaces/asa-rg-da-1/bigDataPools/sparkpool1",
+				"name": "sparkpool1",
+				"type": "Spark",
+				"endpoint": "https://asa-rg-da-1.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/sparkpool1",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net",
+					"authHeader": null
+				},
+				"sparkVersion": "3.3",
+				"nodeCount": 10,
+				"cores": 4,
+				"memory": 28,
+				"extraHeader": null
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"print(\"hi\")"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run Mounted_Notebook"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql import SparkSession\r\n",
+					"# Define the connection properties for Azure SQL database\r\n",
+					"# jdbc_hostname = 'server-rgda1.database.windows.net'\r\n",
+					"# jdbc_port = '1433'\r\n",
+					"# jdbc_database = 'azuresqldb_rgda1'\r\n",
+					"# jdbc_username = 'rgda1'\r\n",
+					"# jdbc_password = 'esspl@123'\r\n",
+					"# tableName='TrunkTable'\r\n",
+					"# tableName1='AppendTable'\r\n",
+					"# Create a SparkSession\r\n",
+					"spark = SparkSession.builder \\\r\n",
+					"    .appName(\"RetrieveFromAzureSQL\") \\\r\n",
+					"    .getOrCreate()\r\n",
+					"\r\n",
+					"# Define the JDBC connection properties\r\n",
+					"jdbc_url = \"jdbc:sqlserver://server-rgda1.database.windows.net:1433;database=azuresqldb_rgda1\"\r\n",
+					"jdbc_table = \"[dbo].[product_table]\"\r\n",
+					"jdbc_username = \"rgda1\"\r\n",
+					"jdbc_password = \"esspl@123\"\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 26
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"query = \"SELECT * from [dbo].[datetime_data]\"\r\n",
+					"\r\n",
+					"# Read data from Azure SQL using the JDBC data source\r\n",
+					"df = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"(\" + query + \") AS subquery\") \\\r\n",
+					"    .option(\"user\", jdbc_username) \\\r\n",
+					"    .option(\"password\", jdbc_password) \\\r\n",
+					"    .load()\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 27
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# display(df)"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('sales','Azb','hotandcoldstorage','abc')"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"folder_path='synfs:/0/abc/JSON DUMP/*.json'"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df_json = spark.read.option(\"multiline\",\"true\").json(folder_path)\r\n",
+					"display(df_json)"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# print(df.count())"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# try:\r\n",
+					"#     df.limit(4000).write.parquet(folder_path, mode=\"overwrite\")\r\n",
+					"#     raise Exception(\"Intentional interruption to simulate Partial Write Error.\")\r\n",
+					"# except Exception as e:\r\n",
+					"#     if mssparkutils.fs.exists(folder_path):\r\n",
+					"#         mssparkutils.fs.rm(folder_path, True)\r\n",
+					"#     mssparkutils.notebook.exit(e)\r\n",
+					"    \r\n",
+					"\r\n",
+					"\r\n",
+					"    "
+				],
+				"execution_count": 32
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# query2 = \"SELECT * from [dbo].[audit_test]\"\r\n",
+					"\r\n",
+					"# # Read data from Azure SQL using the JDBC data source\r\n",
+					"# df2 = spark.read \\\r\n",
+					"#     .format(\"jdbc\") \\\r\n",
+					"#     .option(\"url\", jdbc_url) \\\r\n",
+					"#     .option(\"dbtable\", \"(\" + query2 + \") AS subquery\") \\\r\n",
+					"#     .option(\"user\", jdbc_username) \\\r\n",
+					"#     .option(\"password\", jdbc_password) \\\r\n",
+					"#     .load()"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# display(df2)"
+				]
+			}
+		]
+	}
+}

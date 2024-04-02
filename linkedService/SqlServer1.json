@@ -5,11 +5,11 @@
 		"annotations": [],
 		"type": "SqlServer",
 		"typeProperties": {
-			"connectionString": "integrated security=False;data source=ESSPLLAP95\\SQL2019;initial catalog=AdventureWorksDW2019;user id=sa",
-			"encryptedCredential": "eyJDcmVkZW50aWFsSWQiOiJjMTIxYzVkNC02NTlhLTQ0M2ItYjg2MC01ODFlNmM4N2U3YTkiLCJWZXJzaW9uIjoiMi4wIiwiQ2xhc3NUeXBlIjoiTWljcm9zb2Z0LkRhdGFQcm94eS5Db3JlLkludGVyU2VydmljZURhdGFDb250cmFjdC5DcmVkZW50aWFsU1UwNkNZMTQifQ=="
+			"connectionString": "integrated security=False;data source=ESSPLLAP12\\SQL2019;initial catalog=acm;user id=sa",
+			"encryptedCredential": "eyJDcmVkZW50aWFsSWQiOiI3NzFhYTA1MC0yZjMzLTRlZjEtODNkNi04ZTExNjNiMTUzNDciLCJWZXJzaW9uIjoiMi4wIiwiQ2xhc3NUeXBlIjoiTWljcm9zb2Z0LkRhdGFQcm94eS5Db3JlLkludGVyU2VydmljZURhdGFDb250cmFjdC5DcmVkZW50aWFsU1UwNkNZMTQifQ=="
 		},
 		"connectVia": {
-			"referenceName": "wnd-namcl-ir-01",
+			"referenceName": "IntegrationRuntimeLocalSql",
 			"type": "IntegrationRuntimeReference"
 		}
 	}

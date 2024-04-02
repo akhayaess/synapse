@@ -1,0 +1,867 @@
+{
+	"name": "nb_gcss_booking_details_updated",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "93eaeb96-e8f7-40fd-9cd5-2294e322fec1"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"synapse_widget": {
+				"version": "0.1"
+			},
+			"enableDebugMode": false,
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"%run dynamicRouting/setup/nb_environment_setup"
+				],
+				"execution_count": 63
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"maestro_linked_service = \"ls_maestro_prod_gen2\"\r\n",
+					"mit_linked_service=\"ls_mitcave_gen2\"\r\n",
+					"maestro_storage_account = \"dlsazewpdatalakecleansed\"\r\n",
+					"mit_storage_account = \"wdpmitcdtweuadlscave\""
+				],
+				"execution_count": 64
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"container_mount_point('gcss',maestro_storage_account,maestro_linked_service,'gcss')\r\n",
+					"container_mount_point('wdp-mit-cdt-weu-app-cave-container',mit_storage_account,mit_linked_service,'mit')"
+				],
+				"execution_count": 65
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"jobID = mssparkutils.env.getJobId()"
+				],
+				"execution_count": 66
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"server = \"wdp-mit-cdt-weu-sql.database.windows.net\"\r\n",
+					"database = \"wdp-mit-metadata\"\r\n",
+					"username = \"mit_admin\"\r\n",
+					"from notebookutils import mssparkutils\r\n",
+					"# password = get_secret_value('wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"password = mssparkutils.credentials.getSecret('wdp-mit-cdt-weu-kv-01','wdp-mit-cdt-weu-sql-metadata-password')\r\n",
+					"print(password)\r\n",
+					"jdbc_url = f\"jdbc:sqlserver://{server};database={database};user={username};password={password}\"\r\n",
+					"audit_data = spark.read \\\r\n",
+					"    .format(\"jdbc\") \\\r\n",
+					"    .option(\"url\", jdbc_url) \\\r\n",
+					"    .option(\"dbtable\", \"dbo.audit_log\") \\\r\n",
+					"    .load()\r\n",
+					"display(audit_data)\r\n",
+					""
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"gcss_audit_details = audit_data.filter(col(\"component_name\")==\"nb_gcss_booking_details\")"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"last_run_date_time = gcss_audit_details.collect()[0]['execution_end_time']\r\n",
+					"last_run_date = str(last_run_date_time).split(\" \")[0]"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"min_partition_value = last_run_date\r\n",
+					"max_partition_value = current_date\r\n",
+					"min_partition_date = datetime.strptime(min_partition_value, '%Y-%m-%d')\r\n",
+					"max_partition_date = datetime.strptime(max_partition_value, '%Y-%m-%d')\r\n",
+					"start_date = min_partition_date - relativedelta(months=6)\r\n",
+					"end_date = max_partition_date\r\n",
+					"start_date = start_date.strftime('%Y-%m-%d')\r\n",
+					"end_date = end_date.strftime('%Y-%m-%d')"
+				],
+				"execution_count": 67
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_gcss_shipment_reference = spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/shipment_reference/')\\\r\n",
+					"                                                                    .filter((col(\"date_part\")>=min_partition_value) & (col(\"date_part\") <= max_partition_value ))"
+				],
+				"execution_count": 68
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_entity_type_reference_type = spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/entity_type_reference_type/')\r\n",
+					"                                                        "
+				],
+				"execution_count": 69
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_equipment_assignment= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/equipment_assignment/')\\\r\n",
+					"                                                    .filter((col(\"date_part\")>=start_date) & (col(\"date_part\") <=end_date ))"
+				],
+				"execution_count": 70
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_cont_type_rkem= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/cont_type_rkem/')"
+				],
+				"execution_count": 71
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route/')\\\r\n",
+					"                                    .filter((col(\"date_part\")>=start_date) & (col(\"date_part\") <= end_date))"
+				],
+				"execution_count": 72
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_point= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route_point/')\\\r\n",
+					"                                    .filter((col(\"date_part\")>=start_date) & (col(\"date_part\") <= end_date ))"
+				],
+				"execution_count": 73
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_link= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/route_link/')\\\r\n",
+					"                                    .filter((col(\"date_part\")>=start_date) & (col(\"date_part\") <= end_date))"
+				],
+				"execution_count": 74
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_geo_site= spark.read.format(\"orc\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/geo_site/')"
+				],
+				"execution_count": 75
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_geographic_area= spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/geographic_area/')"
+				],
+				"execution_count": 76
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_rkstves_part = spark.read.format(\"delta\").option(\"header\",\"true\").load('synfs:/'+jobID+'/gcss/rkstves_part/')\t\r\n",
+					""
+				],
+				"execution_count": 77
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_gcss_shipment_reference.createOrReplaceTempView(\"shipment_reference\")\r\n",
+					"df_entity_type_reference_type.createOrReplaceTempView(\"entity_type_reference_type\")\r\n",
+					"df_equipment_assignment.createOrReplaceTempView(\"equipment_assignment\")\r\n",
+					"df_cont_type_rkem.createOrReplaceTempView(\"cont_type_rkem\")\r\n",
+					"df_route.createOrReplaceTempView(\"route\")\r\n",
+					"df_route_point.createOrReplaceTempView(\"route_point\")\r\n",
+					"df_route_link.createOrReplaceTempView(\"route_link\")\r\n",
+					"df_geo_site.createOrReplaceTempView(\"geo_site\")\r\n",
+					"df_geographic_area.createOrReplaceTempView(\"geographic_area\")\r\n",
+					"df_rkstves_part.createOrReplaceTempView(\"rkstves_part\")"
+				],
+				"execution_count": 78
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_booking_number_v=spark.sql(\"\"\"\r\n",
+					"        Select reference_string as Booking_Number\r\n",
+					"            ,create_time as Booking_Creation_Date\r\n",
+					"            ,fk_shipment_version as booking_fk_shipment_version\r\n",
+					"        FROM\r\n",
+					"\r\n",
+					"            (\r\n",
+					"                SELECT reference_string\r\n",
+					"                        ,sr.create_time\r\n",
+					"                        ,sr.fk_shipment_version\r\n",
+					"                        ,row_number()over(PARTITION by reference_string order by sr.create_time) as creation_order\r\n",
+					"                from shipment_reference sr \r\n",
+					"                INNER JOIN entity_type_reference_type etr on trim(etr.instance_id)= trim(sr.fk_entity_type_reference_type)\r\n",
+					"                WHERE etr.name='Booking Number'\r\n",
+					"            )bk\r\n",
+					"        WHERE bk.creation_order=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 79
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"\r\n",
+					"df_eqp_assignment_v= spark.sql(\"\"\"\r\n",
+					"\t\t\t\t\tSELECT  container_number\r\n",
+					"\t\t\t\t\t\t\t,create_time\r\n",
+					"\t\t\t\t\t\t\t,weight_customer\r\n",
+					"\t\t\t\t\t\t\t,fk_shipment_version\r\n",
+					"\t\t\t\t\t\t\t,cosize \r\n",
+					"\t\t\t\t\t\t\t,measure\r\n",
+					"\t\t\t\t\tFROM\r\n",
+					"\t\t\t\t\t\t(\r\n",
+					"\t\t\t\t\t\t\tSELECT fk_rkemeqbc_part as container_number\r\n",
+					"\t\t\t\t\t\t\t\t\t,eq.create_time\r\n",
+					"\t\t\t\t\t\t\t\t\t,weight_customer\r\n",
+					"\t\t\t\t\t\t\t\t\t,fk_shipment_version\r\n",
+					"\t\t\t\t\t\t\t\t\t,ctr.cosize\r\n",
+					"\t\t\t\t\t\t\t\t\t,case when fk_measure_unit_weight_cust =1 then 'KGS' when fk_measure_unit_weight_cust =2 then 'US LBS' end as measure\r\n",
+					"\t\t\t\t\t\t\t\t\t,ROW_NUMBER() OVER (PARTITION BY left(fk_rkemeqbc_part,length(fk_rkemeqbc_part)-1) ORDER BY  eq.create_time) AS order_of_creation\r\n",
+					"\t\t\t\t\t\t\tFROM equipment_assignment as eq\r\n",
+					"\t\t\t\t\t\t\tINNER JOIN cont_type_rkem ctr\r\n",
+					"\t\t\t\t\t\t\ton trim(ctr.instance_id)=trim(eq.fk_cont_type_rkem)\r\n",
+					"\t\t\t\t\t\t\tWHERE fk_rkemeqbc_part  is not null \r\n",
+					"\t\t\t\t\t\t)eqa\r\n",
+					"\t\t\t\t\tWHERE eqa.order_of_creation=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 80
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_v=spark.sql(\"\"\"\r\n",
+					"            Select route_insatnce_id\r\n",
+					"                ,fk_shipment_version  \r\n",
+					"            FROM\r\n",
+					"            (\r\n",
+					"                Select instance_id as route_insatnce_id,fk_shipment_version,Row_Number()Over(partition by fk_shipment_version order by update_time desc) as route_order_of_creation from route \r\n",
+					"            )route_in where route_in.route_order_of_creation=1\r\n",
+					"   \"\"\")\r\n",
+					"   "
+				],
+				"execution_count": 81
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_point_start_v=spark.sql(\"\"\"\r\n",
+					"                 Select route_point_start.fk_route,route_point_start.instance_id,route_point_start.name as Location_Name,route_point_start.geo_area_type_name as Location_Type,layover_time  from \r\n",
+					"            (\r\n",
+					"                Select fk_route,instance_id,layover_time,Row_Number()Over(partition by fk_route,point_sequence order by update_time desc) as order_num, ga.name\r\n",
+					"                ,ga.geoid,ga.geo_area_type_name\r\n",
+					"                from route_point rp\r\n",
+					"                left join (Select * from \r\n",
+					"                            (\r\n",
+					"                            Select ROW_NUMBER()over(partition by siteid order by source_txn_commit desc ) as geo_site_order_num,* from geo_site gs\r\n",
+					"                            )gs where gs.geo_site_order_num=1)gs on rp.fk_geo_site=gs.siteid\r\n",
+					"                left join (\r\n",
+					"                            Select * from \r\n",
+					"                            (\r\n",
+					"                                Select name,geoid,geo_area_type_name,ROW_NUMBER()over(partition by geoid order by last_up_timestamp) as geo_area_order_num  from geographic_area\r\n",
+					"                            ) ga where ga.geo_area_order_num=1)ga on ga.geoid=rp.fk_geographic_area\r\n",
+					"\r\n",
+					"        \r\n",
+					"            )route_point_start\r\n",
+					"\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 82
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_link_v=spark.sql(\"\"\"\r\n",
+					"    Select * from \r\n",
+					"\t\t\t\t(\r\n",
+					"\t\t\t\t\tSelect ROW_NUMBER()over(partition by fk_route_point_start,fk_route_point_end order by load_txn_tm desc ) as route_link_order_num,* from route_link gs\r\n",
+					"\t\t\t\t)rl where rl.route_link_Order_num=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 83
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"ds_vsl_v = spark.sql(\"\"\"\r\n",
+					"            Select * from (\r\n",
+					"                    Select *, ROW_NUMBER() Over(partition by vessel order by source_txn_commit desc) as order_num from rkstves_part \r\n",
+					"                   )vsl where vsl.order_num=1 \r\n",
+					"                   \"\"\")"
+				],
+				"execution_count": 84
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_vsl_start_v=spark.sql(\"\"\"\r\n",
+					"         Select * from (\r\n",
+					"                    Select *, ROW_NUMBER() Over(partition by vessel order by source_txn_commit desc) as order_num from rkstves_part\r\n",
+					"                   )vsl where vsl.order_num=1\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 85
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_route_point_end_link_v=spark.sql(\"\"\"\r\n",
+					"Select route_point_end.fk_route,route_point_end.instance_id,route_point_end.name as Location_Name,route_point_end.geo_area_type_name as Location_Type,layover_time  from \r\n",
+					"     (\r\n",
+					"        Select fk_route,instance_id,layover_time,Row_Number()Over(partition by fk_route,point_sequence order by update_time desc) as order_num, ga.name\r\n",
+					"\t\t,ga.geoid,ga.geo_area_type_name\r\n",
+					"\t\tfrom route_point rp\r\n",
+					"\t\tleft join (Select * from \r\n",
+					"\t\t\t\t    (\r\n",
+					"\t\t\t\t\t   Select ROW_NUMBER()over(partition by siteid order by source_txn_commit desc ) as geo_site_order_num,* from geo_site gs\r\n",
+					"\t\t\t\t    )gs where gs.geo_site_order_num=1)gs on rp.fk_geo_site=gs.siteid\r\n",
+					"\t\tleft join (\r\n",
+					"\t\t\t\t\tSelect * from \r\n",
+					"\t\t\t\t\t(\r\n",
+					"\t\t                   Select name,geoid,geo_area_type_name,ROW_NUMBER()over(partition by geoid order by last_up_timestamp) as geo_area_order_num  from geographic_area\r\n",
+					"\t\t\t\t\t) ga where ga.geo_area_order_num=1)ga on ga.geoid=rp.fk_geographic_area\r\n",
+					"\r\n",
+					"  \r\n",
+					"  )route_point_end\r\n",
+					"\"\"\")"
+				],
+				"execution_count": 86
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_be = df_booking_number_v.join(df_eqp_assignment_v,df_booking_number_v['booking_fk_shipment_version']==df_eqp_assignment_v[\"fk_shipment_version\"],\"left\")\r\n",
+					""
+				],
+				"execution_count": 88
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_ber=df_be.join(df_route_v,df_be['fk_shipment_version']==df_route_v['fk_shipment_version'],\"left\")"
+				],
+				"execution_count": 90
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_rps=df_ber.join(df_route_point_start_v,df_ber['route_insatnce_id']==df_route_point_start_v['fk_route'],\"left\")"
+				],
+				"execution_count": 91
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_routelink_rps=df_rps.join(df_route_link_v,df_rps['instance_id']==df_route_link_v[\"fk_route_point_start\"],\"left\")"
+				],
+				"execution_count": 92
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_vsl_routelink_rps= df_routelink_rps.join(ds_vsl_v,ds_vsl_v['vessel']==df_routelink_rps['rkst_carrier_code'],\"left\")"
+				],
+				"execution_count": 93
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# print(df_vsl_routelink_rps.columns)"
+				],
+				"execution_count": 94
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_sel_vsl_routelink_rps= df_vsl_routelink_rps.select(\r\n",
+					"                                                        col(\"Booking_Number\")\r\n",
+					"                                                        ,col(\"Booking_Creation_Date\")\r\n",
+					"                                                        ,col(\"weight_Customer\")\r\n",
+					"                                                        ,col(\"measure\")\r\n",
+					"                                                        ,col(\"cosize\")\r\n",
+					"                                                        ,col(\"vesnam\").alias(\"Vessel_Name\")\r\n",
+					"                                                        ,col(\"Location_name\")\r\n",
+					"                                                    )"
+				],
+				"execution_count": 95
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#df_vsl_routelink_rps.write.format(\"delta\").option(\"header\",\"true\").mode(\"overwrite\").save('synfs:/'+jobID+'/namdl/cleansed/RKEM/ContainerDetails/')"
+				],
+				"execution_count": 96
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"current_date = datetime.now().strftime('%Y-%m-%d')"
+				],
+				"execution_count": 97
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"write_path = 'synfs:/' + jobID + '/mit/GCSS/' + current_date + '/'"
+				],
+				"execution_count": 98
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_sel_vsl_routelink_rps.write.format(\"delta\").mode(\"append\").save(write_path)\r\n",
+					""
+				],
+				"execution_count": 99
+			}
+		]
+	}
+}
