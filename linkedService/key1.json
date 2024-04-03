@@ -1,0 +1,10 @@
+{
+	"name": "key1",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://EssplDcVault.vault.azure.net/"
+		}
+	}
+}
